@@ -397,10 +397,10 @@ function renderUserbox(){
   $('#userbox').innerHTML=`<div class="avatar">${esc(initials)}</div>
     <div><div style="font-weight:700">${esc(nm)}</div><span class="role-badge ${roleCls}">${roleTxt}</span></div>`;
 }
-function roleLabelMe(){ return state.isMaster?'Master':(state.canEdit?'Financeiro':'Visualização'); }
-function roleLabel(perfil,isMaster){ if(perfil==='gestao') return isMaster?'Master':'Financeiro'; return 'Visualização'; }
+function roleLabelMe(){ return state.isMaster?'Master':(state.canEdit?'Admin':'Visualização'); }
+function roleLabel(perfil,isMaster){ if(perfil==='gestao') return isMaster?'Master':'Admin'; return 'Visualização'; }
 function roleTag(perfil,isMaster){ const l=roleLabel(perfil,isMaster);
-  const cls = l==='Master'?'taxa':(l==='Financeiro'?'ok':'roy'); return `<span class="tag ${cls}">${l}</span>`; }
+  const cls = l==='Master'?'taxa':(l==='Admin'?'ok':'roy'); return `<span class="tag ${cls}">${l}</span>`; }
 function renderNav(){ $('#nav').querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===state.view)); }
 
 const VIEWS={};
@@ -716,13 +716,12 @@ function badgeAcao(a){ const m={criar:'ok',editar:'roy',inativar:'off',receber:'
 VIEWS.usuarios = function(){
   const list=state.usuarios.slice().sort((a,b)=>(a.email||'').localeCompare(b.email||''));
   return `
-  <div class="page-head"><div><h2>Usuários & acesso</h2><p>Quem entra vira "Visualização" automaticamente; um gestor promove para "Gestão".</p></div></div>
-  ${state.isMaster?'':`<div class="banner info">👁️ Apenas o <b>master</b> altera papéis. Aqui você vê a equipe.</div>`}
-  <div class="banner info">➕ Para dar acesso a alguém: no painel do Supabase (Authentication → Users → Add user), crie o e-mail e senha da pessoa. Ela entra aqui e aparece como <b>Visualização</b>; o master define o papel abaixo.</div>
-  <div class="banner info">🔐 <b>Master</b>: dono, acesso total e define permissões. &nbsp;<b>Financeiro</b>: faz tudo (lança, edita, inativa). &nbsp;<b>Visualização</b>: só consulta.</div>
+  <div class="page-head"><div><h2>Usuários & acesso</h2><p>Crie usuários da equipe aqui mesmo, já definindo o papel. Nada é excluído — apenas inativado.</p></div><div class="spacer"></div>${state.isMaster?`<button class="btn primary" data-act="novo-usuario">+ Novo usuário</button>`:''}</div>
+  ${state.isMaster?'':`<div class="banner info">👁️ Apenas o <b>Master</b> cria usuários e altera papéis. Aqui você vê a equipe.</div>`}
+  <div class="banner info">🔐 <b>Master</b>: dono, acesso total e cria/define permissões. &nbsp;<b>Admin</b>: faz tudo (lança, edita, inativa), mas abaixo do Master. &nbsp;<b>Visualização</b>: só consulta.</div>
   <div class="panel"><div class="tbl-wrap"><table>
     <thead><tr><th>Usuário</th><th>E-mail</th><th>Papel</th><th class="num">Status</th><th></th></tr></thead>
-    <tbody>${list.length?list.map(u=>`<tr class="${u.ativo===false?'inativo':''}"><td><b>${esc(u.nome||'—')}</b></td><td class="cell-sub">${esc(u.email||'—')}</td><td>${roleTag(u.perfil,u.isMaster)}</td><td class="num">${u.ativo===false?'<span class="tag off">Inativo</span>':'<span class="tag ok">Ativo</span>'}</td><td><div class="row-actions">${state.isMaster&&u.userId!==state.myId?`<select class="btn sm" data-act="set-perfil" data-id="${u.userId}" style="padding:5px 7px"><option value="master" ${(u.perfil==='gestao'&&u.isMaster)?'selected':''}>Master</option><option value="financeiro" ${(u.perfil==='gestao'&&!u.isMaster)?'selected':''}>Financeiro</option><option value="visualizacao" ${u.perfil!=='gestao'?'selected':''}>Visualização</option></select><button class="btn sm ghost" data-act="user-ativo" data-id="${u.userId}">${u.ativo===false?'Reativar':'Inativar'}</button>`:(u.userId===state.myId?'<span class="cell-sub">você</span>':'')}</div></td></tr>`).join('')
+    <tbody>${list.length?list.map(u=>`<tr class="${u.ativo===false?'inativo':''}"><td><b>${esc(u.nome||'—')}</b></td><td class="cell-sub">${esc(u.email||'—')}</td><td>${roleTag(u.perfil,u.isMaster)}</td><td class="num">${u.ativo===false?'<span class="tag off">Inativo</span>':'<span class="tag ok">Ativo</span>'}</td><td><div class="row-actions">${state.isMaster&&u.userId!==state.myId?`<select class="btn sm" data-act="set-perfil" data-id="${u.userId}" style="padding:5px 7px"><option value="master" ${(u.perfil==='gestao'&&u.isMaster)?'selected':''}>Master</option><option value="admin" ${(u.perfil==='gestao'&&!u.isMaster)?'selected':''}>Admin</option><option value="visualizacao" ${u.perfil!=='gestao'?'selected':''}>Visualização</option></select><button class="btn sm ghost" data-act="user-ativo" data-id="${u.userId}">${u.ativo===false?'Reativar':'Inativar'}</button>`:(u.userId===state.myId?'<span class="cell-sub">você</span>':'')}</div></td></tr>`).join('')
       :`<tr><td colspan="5"><div class="empty"><div class="big">🔑</div>Nenhum usuário além de você ainda.</div></td></tr>`}</tbody></table></div></div>`;
 };
 
@@ -771,6 +770,7 @@ document.body.addEventListener('click', async e=>{
     case 'abrir-lead': return abrirLead(id);
     case 'abrir-franqueado': e.preventDefault(); return renderFranqueado(id);
     case 'testar-bot': return simularBot();
+    case 'novo-usuario': return formUsuario();
     case 'salvar-config': return salvarConfig();
     case 'gerar-royalties': return gerarRoyalties();
     case 'editar': return editar(tipo,id);
@@ -809,9 +809,9 @@ async function verAnexo(path){ const { data, error }=await sb.storage.from('pipo
   if(error){ toast('Não foi possível abrir o anexo',true); return; } window.open(data.signedUrl,'_blank'); }
 
 async function setPerfil(userId, papel){
-  const upd = papel==='master'     ? {perfil:'gestao', is_master:true}
-            : papel==='financeiro' ? {perfil:'gestao', is_master:false}
-            :                        {perfil:'visualizacao', is_master:false};
+  const upd = papel==='master'                    ? {perfil:'gestao', is_master:true}
+            : (papel==='admin'||papel==='financeiro') ? {perfil:'gestao', is_master:false}
+            :                                         {perfil:'visualizacao', is_master:false};
   const { error }=await sb.from('pipo_usuarios').update(upd).eq('user_id',userId);
   if(error){ toast('Erro: '+error.message,true); return; } toast('Papel atualizado'); await loadAll(); }
 async function userAtivo(userId){ const u=state.usuarios.find(x=>x.userId===userId); if(!u) return;
@@ -1215,6 +1215,26 @@ function formLead(item){ const i=item||{};
   async ()=>{ const nome=val('nl-nome'), tel=val('nl-tel'); if(!nome && !tel){ toast('Informe ao menos nome ou telefone',true); return false; }
     const obj={ id:i.id||uid(), nome, telefone:tel, email:val('nl-email'), cidade:val('nl-cidade'), estado:val('nl-uf'), comoConheceu:val('nl-como')||null, origem:i.origem||'manual', etapa:i.etapa||'novo', ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
     if(await save('leads',obj)){ await logAcao(item?'editar':'criar','Lead',obj.id,nome||tel); toast('Lead salvo'); await loadAll(); } });
+}
+
+/* ---------- Criar usuário (Master, via função segura) ---------- */
+function formUsuario(){
+  if(!state.isMaster){ toast('Apenas o Master cria usuários',true); return; }
+  openModal('Novo usuário', `<div class="form-grid">
+    <div class="field full"><label>Nome</label><input id="nu-nome" placeholder="nome da pessoa"></div>
+    <div class="field full"><label>E-mail *</label><input id="nu-email" type="email" placeholder="email@empresa.com"></div>
+    <div class="field"><label>Senha provisória *</label><input id="nu-senha" type="text" placeholder="mín. 6 caracteres"></div>
+    <div class="field"><label>Papel *</label><select id="nu-papel">
+      <option value="visualizacao">Visualização (só consulta)</option>
+      <option value="admin">Admin (faz tudo, abaixo do Master)</option>
+      <option value="master">Master (acesso total)</option>
+    </select></div>
+    <div class="field full"><div class="botbox">A pessoa entra com esse e-mail e a senha provisória. Você pode passar a senha pra ela; depois ela usa normalmente. Nada é excluído aqui — usuários são inativados.</div></div>
+  </div>`,
+  async ()=>{ const email=val('nu-email'), senha=val('nu-senha'); if(!email){ toast('Informe o e-mail',true); return false; } if(senha.length<6){ toast('Senha de ao menos 6 caracteres',true); return false; }
+    const { data, error } = await sb.functions.invoke('pipo-criar-usuario', { body:{ email, senha, nome:val('nu-nome'), papel:val('nu-papel') } });
+    if(error || (data&&data.error)){ toast('Erro: '+((data&&data.error)||error.message),true); return false; }
+    await logAcao('criar','Usuário',data&&data.user_id,email+' ('+val('nu-papel')+')'); toast('Usuário criado 🎉'); await loadAll(); });
 }
 
 /* ---------- Simulador do bot (testa a Edge Function pipo-bot) ---------- */
