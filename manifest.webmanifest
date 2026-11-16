@@ -1,0 +1,15 @@
+{
+  "name": "Pipó Power System",
+  "short_name": "Pipó",
+  "description": "Gestão da franqueadora Pipó — franqueados, financeiro e CRM.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#fff8e8",
+  "theme_color": "#c9a24a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

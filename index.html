@@ -2,8 +2,16 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Pipó Power System</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#c9a24a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pipó">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" href="/icon-192.png">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -169,6 +177,14 @@
 .msg.out{align-self:flex-end;background:#d9f0df}
 .msg .meta{display:block;font-size:10px;color:#8a7a63;margin-top:3px}
 .botbox{background:#fff8e8;border:1px solid #f0dca0;border-radius:10px;padding:10px;font-size:13px;color:#5b4a2a}
+.lnk{color:#8a5a00;text-decoration:none}
+.lnk:hover{text-decoration:underline}
+.tabs{display:flex;gap:2px;border-bottom:1px solid #eadfce;margin-bottom:14px;flex-wrap:wrap}
+.tab{padding:8px 14px;border:0;background:none;cursor:pointer;font-weight:600;color:#8a7a63;border-bottom:2px solid transparent}
+.tab.active{color:#3b2f1c;border-bottom-color:#c9a24a}
+.minirow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 11px;border:1px solid #eadfce;border-radius:8px;background:#fff;margin-bottom:6px}
+.minirow .mi-sub{font-size:12px;color:#8a7a63}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;background:#f2ead9;font-size:12px;color:#6b5a3a}
 </style>
 </head>
 <body>
@@ -191,6 +207,7 @@
     <div class="brand"><div class="logo">🍿</div><div>Pipó Power System<small>Franqueadora · Fluxo de caixa</small></div></div>
     <div class="spacer"></div>
     <div class="userbox" id="userbox"></div>
+    <button class="btn sm" id="install-btn" title="Instalar como aplicativo" style="display:none">⬇️ Instalar app</button>
     <button class="btn sm ghost" id="logout-btn" title="Sair">Sair</button>
   </header>
   <div class="shell">
@@ -208,7 +225,7 @@
       <div class="nav-item" data-view="despesas"><span class="ico">📉</span> Despesas</div>
       <div class="nav-item" data-view="aportes"><span class="ico">🤝</span> Aportes</div>
       <div class="nav-sep">Arquivo</div>
-      <div class="nav-item" data-view="documentos"><span class="ico">📁</span> Documentos</div>
+      <div class="nav-item" data-view="documentos"><span class="ico">📁</span> Docs internos</div>
       <div class="nav-item" data-view="registros"><span class="ico">🕑</span> Registros</div>
       <div class="nav-item" data-view="usuarios"><span class="ico">🔑</span> Usuários</div>
       <div class="nav-item" data-view="config"><span class="ico">⚙️</span> Configurações</div>
@@ -227,10 +244,10 @@ const SUPABASE_URL = "https://axxpeuihqfsucpbzohas.supabase.co";
 const SUPABASE_KEY = "sb_publishable_6ywi2eGcmLmk75oS44PjDQ_iWkrxKUp";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const TABLES = ["franqueados","unidades","vendas","receitas","despesas","aportes","documentos","log","usuarios","leads","lead_mensagens"];
+const TABLES = ["franqueados","unidades","vendas","receitas","despesas","aportes","documentos","log","usuarios","leads","lead_mensagens","socios"];
 const state = {
   franqueados:[], unidades:[], vendas:[], receitas:[], despesas:[], aportes:[], documentos:[], log:[], usuarios:[],
-  leads:[], leadMensagens:[],
+  leads:[], leadMensagens:[], socios:[],
   config:{ royaltyPct:8, royaltyMinimo:1200, diaVencimento:10, taxaFranquia:25000 },
   me:null, myId:null, myEmail:null, perfil:'visualizacao', canEdit:false, isMaster:false,
   view:"painel", filtros:{ compMes:"", regiao:"", franqueado:"", status:"" }, showInativos:false
@@ -263,7 +280,7 @@ function toRow(obj){ const o={}; for(const k in obj){ if(obj[k]!==undefined) o[t
 /* ---------- data access ---------- */
 async function loadAll(){
   const names = TABLES.map(t=>'pipo_'+t);
-  const [fr,un,vd,rc,dp,ap,dc,lg,us,cfg,ld,lm] = await Promise.all([
+  const [fr,un,vd,rc,dp,ap,dc,lg,us,cfg,ld,lm,sc] = await Promise.all([
     sb.from('pipo_franqueados').select('*'),
     sb.from('pipo_unidades').select('*'),
     sb.from('pipo_vendas').select('*'),
@@ -275,7 +292,8 @@ async function loadAll(){
     sb.from('pipo_usuarios').select('*'),
     sb.from('pipo_config').select('*').eq('id','geral').maybeSingle(),
     sb.from('pipo_leads').select('*'),
-    sb.from('pipo_lead_mensagens').select('*').order('em',{ascending:true})
+    sb.from('pipo_lead_mensagens').select('*').order('em',{ascending:true}),
+    sb.from('pipo_socios').select('*')
   ]);
   const err = [fr,un,vd,rc,dp,ap,dc,lg,us].find(r=>r.error);
   if(err && err.error){ toast('Erro ao carregar: '+err.error.message, true); }
@@ -290,6 +308,7 @@ async function loadAll(){
   state.usuarios=(us.data||[]).map(fromRow);
   state.leads=(ld&&ld.data||[]).map(fromRow);
   state.leadMensagens=(lm&&lm.data||[]).map(fromRow);
+  state.socios=(sc&&sc.data||[]).map(fromRow);
   if(cfg && cfg.data) state.config={...state.config, ...fromRow(cfg.data)};
   renderApp();
 }
@@ -532,7 +551,8 @@ VIEWS.franqueados = function(){
     <thead><tr><th>Franqueado</th><th>Documento</th><th>Contato</th><th>Praça</th><th class="num">Unidades</th><th class="num">Status</th><th></th></tr></thead>
     <tbody>${list.length?list.slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(f=>{
       const un=ativos(state.unidades).filter(u=>u.franqueadoId===f.id).length;
-      return `<tr class="${f.ativo===false?'inativo':''}"><td><b>${esc(f.nome)}</b></td><td class="cell-sub">${esc(f.documento||'—')}</td><td class="cell-sub">${esc(f.contato||'—')}</td><td>${esc([f.cidade,f.estado].filter(Boolean).join(' / ')||'—')}</td><td class="num">${un}</td><td class="num">${f.ativo===false?'<span class="tag off">Inativo</span>':'<span class="tag ok">Ativo</span>'}</td><td><div class="row-actions">${rowActions('franqueado',f)}</div></td></tr>`;}).join('')
+      const soc=ativos(state.socios).filter(s=>s.franqueadoId===f.id).length;
+      return `<tr class="${f.ativo===false?'inativo':''}"><td><a href="#" class="lnk" data-act="abrir-franqueado" data-id="${f.id}"><b>${esc(f.nome)}</b></a>${soc?` <span class="cell-sub">· ${soc} sócio(s)</span>`:''}</td><td class="cell-sub">${esc(f.documento||'—')}</td><td class="cell-sub">${esc(f.contato||f.telefone||'—')}</td><td>${esc([f.cidade,f.estado].filter(Boolean).join(' / ')||'—')}</td><td class="num">${un}</td><td class="num">${f.ativo===false?'<span class="tag off">Inativo</span>':'<span class="tag ok">Ativo</span>'}</td><td><div class="row-actions"><button class="btn sm" data-act="abrir-franqueado" data-id="${f.id}">Abrir ficha</button>${rowActions('franqueado',f)}</div></td></tr>`;}).join('')
       :`<tr><td colspan="7"><div class="empty"><div class="big">👥</div>Nenhum franqueado cadastrado.</div></td></tr>`}</tbody></table></div></div>`;
 };
 
@@ -667,14 +687,15 @@ VIEWS.aportes = function(){
 
 /* ---------------- DOCUMENTOS ---------------- */
 VIEWS.documentos = function(){
-  const list=(state.showInativos?state.documentos.slice():ativos(state.documentos)).sort((a,b)=>tms(b.criadoEm)-tms(a.criadoEm));
+  const base=(state.showInativos?state.documentos.slice():ativos(state.documentos)).filter(d=>d.interno===true || (!d.franqueadoId && d.interno!==false));
+  const list=base.sort((a,b)=>tms(b.criadoEm)-tms(a.criadoEm));
   return `${readOnlyNote()}
-  <div class="page-head"><div><h2>Documentos & contratos</h2><p>Arquivo digital dos contratos de franquia e demais documentos da rede.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="novo-documento">+ Novo documento</button>`:''}</div>
+  <div class="page-head"><div><h2>Documentos internos</h2><p>Arquivo da franqueadora (institucional, operacional, jurídico). Os contratos de cada franqueado ficam na ficha do franqueado.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="novo-documento">+ Novo documento</button>`:''}</div>
   <div class="panel"><div class="tbl-wrap"><table>
-    <thead><tr><th>Título</th><th>Tipo</th><th>Vínculo</th><th class="num">Data</th><th>Arquivo</th><th></th></tr></thead>
-    <tbody>${list.length?list.map(d=>{ const fr=franqById(d.franqueadoId); const u=unidById(d.unidadeId);
-      return `<tr class="${d.ativo===false?'inativo':''}"><td><b>${esc(d.titulo||'—')}</b></td><td class="cell-sub">${esc(d.tipo||'—')}</td><td>${esc(fr?.nome||'')}${u?` <span class="cell-sub">· ${esc(u.codigo||'')}</span>`:''}${!fr&&!u?'<span class="cell-sub">rede</span>':''}</td><td class="num">${fmtDate(d.data)}</td><td>${anexoCell(d)}</td><td><div class="row-actions">${rowActions('documento',d)}</div></td></tr>`;}).join('')
-      :`<tr><td colspan="6"><div class="empty"><div class="big">📁</div>Nenhum documento guardado.</div></td></tr>`}</tbody></table></div></div>`;
+    <thead><tr><th>Título</th><th>Tipo</th><th class="num">Data</th><th>Arquivo</th><th></th></tr></thead>
+    <tbody>${list.length?list.map(d=>{
+      return `<tr class="${d.ativo===false?'inativo':''}"><td><b>${esc(d.titulo||'—')}</b></td><td class="cell-sub">${esc(d.tipo||'—')}</td><td class="num">${fmtDate(d.data)}</td><td>${anexoCell(d)}</td><td><div class="row-actions">${rowActions('documento',d)}</div></td></tr>`;}).join('')
+      :`<tr><td colspan="5"><div class="empty"><div class="big">📁</div>Nenhum documento interno guardado.</div></td></tr>`}</tbody></table></div></div>`;
 };
 
 /* ---------------- REGISTROS ---------------- */
@@ -748,6 +769,8 @@ document.body.addEventListener('click', async e=>{
     case 'novo-documento': return formDocumento();
     case 'novo-lead': return formLead();
     case 'abrir-lead': return abrirLead(id);
+    case 'abrir-franqueado': e.preventDefault(); return renderFranqueado(id);
+    case 'testar-bot': return simularBot();
     case 'salvar-config': return salvarConfig();
     case 'gerar-royalties': return gerarRoyalties();
     case 'editar': return editar(tipo,id);
@@ -824,15 +847,21 @@ function formFranqueado(item){ const i=item||{};
   openModal(item?'Editar franqueado':'Novo franqueado',`<div class="form-grid">
     <div class="field full"><label>Nome / razão social *</label><input id="fq-nome" value="${esc(i.nome||'')}"></div>
     <div class="field"><label>CPF / CNPJ</label><input id="fq-doc" value="${esc(i.documento||'')}"></div>
-    <div class="field"><label>Contato</label><input id="fq-contato" value="${esc(i.contato||'')}"></div>
+    <div class="field"><label>Pessoa de contato</label><input id="fq-contato" value="${esc(i.contato||'')}"></div>
+    <div class="field"><label>Telefone / WhatsApp</label><input id="fq-tel" value="${esc(i.telefone||'')}"></div>
+    <div class="field"><label>E-mail</label><input id="fq-email" value="${esc(i.email||'')}"></div>
+    <div class="field"><label>CEP</label><input id="fq-cep" value="${esc(i.cep||'')}"></div>
+    <div class="field full"><label>Endereço</label><input id="fq-end" value="${esc(i.endereco||'')}" placeholder="rua, número, complemento"></div>
+    <div class="field"><label>Bairro</label><input id="fq-bairro" value="${esc(i.bairro||'')}"></div>
     <div class="field"><label>Cidade</label><input id="fq-cidade" value="${esc(i.cidade||'')}"></div>
-    <div class="field"><label>Estado</label><select id="fq-uf">${ufOptions(i.estado)}</select></div></div>`,
+    <div class="field"><label>Estado</label><select id="fq-uf">${ufOptions(i.estado)}</select></div>
+    </div>${!item?`<div class="botbox" style="margin-top:10px">Depois de salvar, clique no franqueado na lista para abrir a ficha completa (unidades, sócios e contratos).</div>`:''}`,
     async ()=>{ const nome=val('fq-nome'); if(!nome){ toast('Informe o nome',true); return false; }
-      const obj={ id:i.id||uid(), nome, documento:val('fq-doc'), contato:val('fq-contato'), cidade:val('fq-cidade'), estado:val('fq-uf'), ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      const obj={ id:i.id||uid(), nome, documento:val('fq-doc'), contato:val('fq-contato'), telefone:val('fq-tel')||null, email:val('fq-email')||null, cep:val('fq-cep')||null, endereco:val('fq-end')||null, bairro:val('fq-bairro')||null, cidade:val('fq-cidade'), estado:val('fq-uf'), ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
       if(await save('franqueados',obj)){ await logAcao(item?'editar':'criar','Franqueado',obj.id,nome); toast('Franqueado salvo'); await loadAll(); } });
 }
-function formUnidade(item){ const i=item||{};
-  openModal(item?'Editar unidade':'Nova unidade',`<div class="form-grid">
+function formUnidade(item, preset){ const i=item||preset||{}; const isEdit=!!item;
+  openModal(isEdit?'Editar unidade':'Nova unidade',`<div class="form-grid">
     <div class="field"><label>Código *</label><input id="un-cod" value="${esc(i.codigo||'')}" placeholder="PIPO-001"></div>
     <div class="field"><label>Ponto / apelido</label><input id="un-apel" value="${esc(i.apelido||'')}"></div>
     <div class="field full"><label>Franqueado *</label><select id="un-franq">${franqOptions(i.franqueadoId)}</select></div>
@@ -843,15 +872,15 @@ function formUnidade(item){ const i=item||{};
     <div class="field"><label>Dia de vencimento</label><input id="un-dia" type="number" min="1" max="28" value="${i.diaVencimento??state.config.diaVencimento}"></div>
     <div class="field"><label>Situação</label><select id="un-status"><option value="ativa" ${i.status!=='implantacao'?'selected':''}>Ativa</option><option value="implantacao" ${i.status==='implantacao'?'selected':''}>Em implantação</option></select></div>
     <div class="field"><label>Data de instalação</label><input id="un-data" type="date" value="${esc(i.dataInstalacao||'')}"></div>
-    <div class="field full"><label class="toggle"><input type="checkbox" id="un-taxa" ${item?'':'checked'}> gerar lançamento da taxa de franquia (${brl(state.config.taxaFranquia)})</label></div></div>`,
+    <div class="field full"><label class="toggle"><input type="checkbox" id="un-taxa" ${isEdit?'':'checked'}> gerar lançamento da taxa de franquia (${brl(state.config.taxaFranquia)})</label></div></div>`,
     async ()=>{ const cod=val('un-cod'), franq=val('un-franq'); if(!cod){ toast('Informe o código',true); return false; } if(!franq){ toast('Selecione o franqueado',true); return false; }
       const obj={ id:i.id||uid(), codigo:cod, apelido:val('un-apel'), franqueadoId:franq, cidade:val('un-cidade'), estado:val('un-uf'), royaltyPct:numval('un-roy'), royaltyMinimo:numval('un-min'), diaVencimento:numval('un-dia')||state.config.diaVencimento, status:val('un-status'), dataInstalacao:val('un-data')||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
-      if(await save('unidades',obj)){ await logAcao(item?'editar':'criar','Unidade',obj.id,cod);
+      if(await save('unidades',obj)){ await logAcao(isEdit?'editar':'criar','Unidade',obj.id,cod);
         const taxaEl=document.getElementById('un-taxa');
-        if(!item && taxaEl && taxaEl.checked){ const venc=obj.dataInstalacao||todayISO();
+        if(!isEdit && taxaEl && taxaEl.checked){ const venc=obj.dataInstalacao||todayISO();
           const rec={ id:uid(), tipo:'taxa_franquia', franqueadoId:franq, unidadeId:obj.id, competencia:monthKey(venc), valor:state.config.taxaFranquia, vencimento:venc, status:'previsto', origem:'manual', ativo:true, criadoPor:state.myId, criadoEm:new Date().toISOString() };
           await save('receitas',rec); await logAcao('criar','Receita',rec.id,'Taxa de franquia '+cod+' '+brl(rec.valor)); }
-        toast('Unidade salva'); await loadAll(); } });
+        toast('Unidade salva'); await loadAll(); if(preset&&preset.reopenFranq){ const fid=preset.reopenFranq; setTimeout(()=>renderFranqueado(fid,'unidades'),0); } } });
 }
 function formVenda(item){ const i=item||{};
   openModal(item?'Editar venda':'Lançar venda',`<div class="form-grid">
@@ -912,19 +941,81 @@ function formAporte(item){ const i=item||{};
       const obj={ id:i.id||uid(), socio, valor, data:val('ap-data')||null, competencia:val('ap-comp')||monthKey(val('ap-data')||todayISO()), forma:val('ap-forma'), finalidade:val('ap-fin')||null, observacao:val('ap-obs'), anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
       if(await save('aportes',obj)){ await logAcao(item?'editar':'criar','Aporte',obj.id,socio+' '+brl(valor)); toast('Aporte salvo'); await loadAll(); } });
 }
-function formDocumento(item){ const i=item||{}; const tipos=['Contrato de franquia','COF','Aditivo','Procuração','Comprovante','Outro'];
-  openModal(item?'Editar documento':'Novo documento',`<div class="form-grid">
+function formDocumento(item, preset){ const i=item||preset||{}; const isEdit=!!item; const tipos=['Contrato de franquia','COF','Aditivo','Procuração','Comprovante','Outro'];
+  const contratoFranq=!!(i.franqueadoId) && i.interno!==true;
+  openModal(isEdit?'Editar documento':(contratoFranq?'Novo contrato do franqueado':'Novo documento interno'),`<div class="form-grid">
     <div class="field full"><label>Título *</label><input id="dc-tit" value="${esc(i.titulo||'')}"></div>
     <div class="field"><label>Tipo</label><select id="dc-tipo">${tipos.map(t=>`<option ${i.tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
     <div class="field"><label>Data</label><input id="dc-data" type="date" value="${esc(i.data||todayISO())}"></div>
-    <div class="field"><label>Franqueado (opcional)</label><select id="dc-franq">${franqOptions(i.franqueadoId)}</select></div>
-    <div class="field"><label>Unidade (opcional)</label><select id="dc-unid">${unidOptions(i.unidadeId)}</select></div>
-    <div class="field full"><label>Arquivo ${item&&i.anexoPath?'(enviar substitui o atual)':''}</label><input id="dc-file" type="file"></div></div>`,
+    ${contratoFranq?`<input type="hidden" id="dc-franq-fixo" value="${esc(i.franqueadoId)}">`:`<div class="field full"><label>Franqueado (deixe em branco = documento interno)</label><select id="dc-franq">${franqOptions(i.franqueadoId)}</select></div>`}
+    <div class="field full"><label>Arquivo ${isEdit&&i.anexoPath?'(enviar substitui o atual)':''}</label><input id="dc-file" type="file"></div></div>`,
     async ()=>{ const tit=val('dc-tit'); if(!tit){ toast('Informe o título',true); return false; }
       const anexo=await handleUpload('dc-file','documentos');
-      const obj={ id:i.id||uid(), titulo:tit, tipo:val('dc-tipo'), data:val('dc-data')||null, franqueadoId:val('dc-franq')||null, unidadeId:val('dc-unid')||null, anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
-      if(await save('documentos',obj)){ await logAcao(item?'editar':'criar','Documento',obj.id,tit); toast('Documento salvo'); await loadAll(); } });
+      const franqId = contratoFranq ? (document.getElementById('dc-franq-fixo')||{}).value : (val('dc-franq')||null);
+      const interno = contratoFranq ? false : (franqId ? false : true);
+      const obj={ id:i.id||uid(), titulo:tit, tipo:val('dc-tipo'), data:val('dc-data')||null, franqueadoId:franqId||null, interno, anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      if(await save('documentos',obj)){ await logAcao(isEdit?'editar':'criar','Documento',obj.id,tit); toast('Documento salvo'); await loadAll(); if(preset&&preset.reopenFranq){ const fid=preset.reopenFranq; setTimeout(()=>renderFranqueado(fid,'contratos'),0); } } });
 }
+/* ---------- Ficha completa do franqueado (abas) ---------- */
+function renderFranqueado(id, tab){
+  const f=state.franqueados.find(x=>x.id===id); if(!f) return;
+  tab=tab||'dados'; const ed=state.canEdit;
+  const unis=ativos(state.unidades).filter(u=>u.franqueadoId===id);
+  const socs=ativos(state.socios).filter(s=>s.franqueadoId===id);
+  const docs=ativos(state.documentos).filter(d=>d.franqueadoId===id && d.interno!==true);
+  const tb=(k,l)=>`<button class="tab ${tab===k?'active':''}" data-ftab="${k}">${l}</button>`;
+  const tabs=`<div class="tabs">${tb('dados','Dados & contato')}${tb('unidades','Unidades ('+unis.length+')')}${tb('socios','Sócios ('+socs.length+')')}${tb('contratos','Contratos ('+docs.length+')')}</div>`;
+  let body='';
+  if(tab==='dados'){
+    const row=(l,v)=>`<div class="field"><label>${l}</label><div style="padding:6px 0;font-weight:600">${esc(v||'—')}</div></div>`;
+    body=`<div class="form-grid">
+      ${row('Nome / razão social',f.nome)}${row('CPF / CNPJ',f.documento)}
+      ${row('Pessoa de contato',f.contato)}${row('Telefone / WhatsApp',f.telefone)}
+      ${row('E-mail',f.email)}${row('CEP',f.cep)}
+      <div class="field full"><label>Endereço</label><div style="padding:6px 0;font-weight:600">${esc([f.endereco,f.bairro,[f.cidade,f.estado].filter(Boolean).join('/')].filter(Boolean).join(' · ')||'—')}</div></div>
+    </div>${ed?`<div style="margin-top:12px"><button class="btn" data-fedit="1">✏️ Editar dados</button></div>`:''}`;
+  } else if(tab==='unidades'){
+    body=`${ed?`<div style="margin-bottom:10px"><button class="btn primary" data-fnova-unidade="1">+ Nova unidade</button></div>`:''}
+      ${unis.length?unis.map(u=>`<div class="minirow"><div><b>${esc(u.codigo||'')}</b>${u.apelido?' · '+esc(u.apelido):''}<div class="mi-sub">${esc([u.cidade,u.estado].filter(Boolean).join('/')||'—')} · royalty ${u.royaltyPct??state.config.royaltyPct}% (mín. ${brl(u.royaltyMinimo??state.config.royaltyMinimo)})</div></div><span class="pill">${u.status==='implantacao'?'Implantação':'Ativa'}</span></div>`).join(''):'<div class="fempty">Nenhuma unidade vinculada.</div>'}`;
+  } else if(tab==='socios'){
+    body=`${ed?`<div style="margin-bottom:10px"><button class="btn primary" data-fnovo-socio="1">+ Novo sócio</button></div>`:''}
+      ${socs.length?socs.map(s=>`<div class="minirow"><div><b>${esc(s.nome||'—')}</b>${s.participacao?' · <span class="pill">'+s.participacao+'%</span>':''}<div class="mi-sub">${esc([s.documento,s.telefone,s.email].filter(Boolean).join(' · ')||'—')}</div></div>${ed?`<span><button class="btn sm ghost" data-fsocio-edit="${s.id}">Editar</button><button class="btn sm ghost" data-fsocio-off="${s.id}">Inativar</button></span>`:''}</div>`).join(''):'<div class="fempty">Nenhum sócio cadastrado.</div>'}`;
+  } else {
+    body=`${ed?`<div style="margin-bottom:10px"><button class="btn primary" data-fnovo-contrato="1">+ Novo contrato</button></div>`:''}
+      <div class="mi-sub" style="margin-bottom:8px">Contratos firmados entre este franqueado e a franqueadora.</div>
+      ${docs.length?docs.map(d=>`<div class="minirow"><div><b>${esc(d.titulo||'—')}</b><div class="mi-sub">${esc(d.tipo||'')} · ${fmtDate(d.data)}</div></div><span>${anexoCell(d)}${ed?` <button class="btn sm ghost" data-fdoc-off="${d.id}">Inativar</button>`:''}</span></div>`).join(''):'<div class="fempty">Nenhum contrato guardado.</div>'}`;
+  }
+  renderModal('Franqueado — '+(f.nome||''), tabs+body, '<button class="btn" data-close>Fechar</button>');
+  const root=$('#modal-root');
+  root.querySelectorAll('[data-ftab]').forEach(b=>b.addEventListener('click',()=>renderFranqueado(id,b.dataset.ftab)));
+  const fe=root.querySelector('[data-fedit]'); if(fe) fe.addEventListener('click',()=>formFranqueado(f));
+  const fnu=root.querySelector('[data-fnova-unidade]'); if(fnu) fnu.addEventListener('click',()=>formUnidade(null,{franqueadoId:id,reopenFranq:id}));
+  const fns=root.querySelector('[data-fnovo-socio]'); if(fns) fns.addEventListener('click',()=>formSocio(id));
+  const fnc=root.querySelector('[data-fnovo-contrato]'); if(fnc) fnc.addEventListener('click',()=>formDocumento(null,{franqueadoId:id,interno:false,reopenFranq:id}));
+  root.querySelectorAll('[data-fsocio-edit]').forEach(b=>b.addEventListener('click',()=>{ const s=state.socios.find(x=>x.id===b.dataset.fsocioEdit); formSocio(id,s); }));
+  root.querySelectorAll('[data-fsocio-off]').forEach(b=>b.addEventListener('click',()=>inativarSocio(b.dataset.fsocioOff,id)));
+  root.querySelectorAll('[data-fdoc-off]').forEach(b=>b.addEventListener('click',()=>inativarDocFranq(b.dataset.fdocOff,id)));
+}
+function formSocio(franqueadoId, item){ const i=item||{};
+  openModal(item?'Editar sócio':'Novo sócio', `<div class="form-grid">
+    <div class="field full"><label>Nome *</label><input id="so-nome" value="${esc(i.nome||'')}"></div>
+    <div class="field"><label>CPF / CNPJ</label><input id="so-doc" value="${esc(i.documento||'')}"></div>
+    <div class="field"><label>Participação (%)</label><input id="so-part" type="number" step="0.01" value="${i.participacao??''}"></div>
+    <div class="field"><label>Telefone</label><input id="so-tel" value="${esc(i.telefone||'')}"></div>
+    <div class="field"><label>E-mail</label><input id="so-email" value="${esc(i.email||'')}"></div>
+    <div class="field full"><label>Observação</label><input id="so-obs" value="${esc(i.observacao||'')}"></div>
+  </div>`,
+  async ()=>{ const nome=val('so-nome'); if(!nome){ toast('Informe o nome',true); return false; }
+    const obj={ id:i.id||uid(), franqueadoId:item?i.franqueadoId:franqueadoId, nome, documento:val('so-doc')||null, participacao:numval('so-part')||null, telefone:val('so-tel')||null, email:val('so-email')||null, observacao:val('so-obs')||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+    if(await save('socios',obj)){ await logAcao(item?'editar':'criar','Sócio',obj.id,nome); toast('Sócio salvo'); await loadAll(); setTimeout(()=>renderFranqueado(franqueadoId,'socios'),0); } });
+}
+async function inativarSocio(id, franqId){ const s=state.socios.find(x=>x.id===id); if(!s) return;
+  if(!confirm('Inativar este sócio? Ele sai da lista mas fica no histórico.')) return;
+  if(await save('socios',{...s,ativo:false,atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()})){ await logAcao('inativar','Sócio',id,s.nome||''); toast('Sócio inativado'); await loadAll(); renderFranqueado(franqId,'socios'); } }
+async function inativarDocFranq(id, franqId){ const d=state.documentos.find(x=>x.id===id); if(!d) return;
+  if(!confirm('Inativar este contrato? Ele sai da lista mas fica no histórico.')) return;
+  if(await save('documentos',{...d,ativo:false,atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()})){ await logAcao('inativar','Documento',id,d.titulo||''); toast('Contrato inativado'); await loadAll(); renderFranqueado(franqId,'contratos'); } }
+
 function editar(tipo,id){ const coll=collOf(tipo); const item=state[coll].find(x=>x.id===id); if(!item) return;
   ({franqueado:formFranqueado,unidade:formUnidade,venda:formVenda,receita:formReceita,despesa:formDespesa,aporte:formAporte,documento:formDocumento}[tipo])(item); }
 
@@ -986,14 +1077,25 @@ function leadCampoPreenchido(l,campo){
 function proximaPergunta(l){ for(const p of BOT.perguntas){ if(!leadCampoPreenchido(l,p.campo)) return p; } return null; }
 function faltaLabel(c){ return ({capital_ok:'capital',ponto_ok:'ponto',qtd_maquinas:'nº máquinas'})[c]||c; }
 
+function ultimoContatoLead(id){ const ms=state.leadMensagens.filter(m=>m.leadId===id); if(!ms.length) return null; return ms.reduce((a,m)=>tms(m.em)>tms(a)?m.em:a, ms[0].em); }
 VIEWS.leads = function(){
-  const leads=ativos(state.leads);
-  const porEtapa=k=>leads.filter(l=>l.etapa===k);
-  const emConversa=leads.filter(l=>['contatado','qualificando','qualificado'].includes(l.etapa)).length;
+  const f=state.filtros;
+  const all=ativos(state.leads);
+  let leads=all;
+  const busca=(f.leadBusca||'').toLowerCase().trim();
+  if(busca) leads=leads.filter(l=>((l.nome||'')+' '+(l.telefone||'')+' '+(l.cidade||'')+' '+(l.email||'')).toLowerCase().includes(busca));
+  if(f.leadOrigem) leads=leads.filter(l=>l.origem===f.leadOrigem);
+  const porEtapa=k=>all.filter(l=>l.etapa===k);
+  const emConversa=all.filter(l=>['contatado','qualificando','qualificado'].includes(l.etapa)).length;
   const kpi=(v,l)=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  const origens=[...new Set(all.map(l=>l.origem).filter(Boolean))];
   return `${readOnlyNote()}
-  <div class="page-head"><div><h2>Leads / Funil</h2><p>Leads da landing e do WhatsApp da Pipó. Cada resposta do lead vira dado no cadastro — leve até o agendamento da reunião.</p></div><div class="spacer"></div>${state.canEdit?`<button class="btn primary" data-act="novo-lead">+ Novo lead</button>`:''}</div>
-  <div class="kpis">${kpi(leads.length,'Leads ativos')}${kpi(emConversa,'Em conversa')}${kpi(porEtapa('reuniao_agendada').length,'Reuniões agendadas')}${kpi(porEtapa('ganho').length,'Ganhos')}</div>
+  <div class="page-head"><div><h2>Leads / Funil</h2><p>Leads da landing e do WhatsApp da Pipó. Cada resposta do lead vira dado no cadastro — leve até o agendamento da reunião.</p></div><div class="spacer"></div>${state.canEdit?`<button class="btn" data-act="testar-bot">🤖 Testar bot</button> <button class="btn primary" data-act="novo-lead">+ Novo lead</button>`:''}</div>
+  <div class="kpis">${kpi(all.length,'Leads ativos')}${kpi(emConversa,'Em conversa')}${kpi(porEtapa('reuniao_agendada').length,'Reuniões agendadas')}${kpi(porEtapa('ganho').length,'Ganhos')}</div>
+  <div class="filters" style="margin-bottom:12px">
+    <input data-filtro="leadBusca" placeholder="🔎 Buscar por nome, telefone, cidade..." value="${esc(f.leadBusca||'')}" style="min-width:240px">
+    <select data-filtro="leadOrigem" style="width:auto"><option value="">Todas as origens</option>${origens.map(o=>`<option value="${o}" ${f.leadOrigem===o?'selected':''}>${esc(canalLabel(o))}</option>`).join('')}</select>
+  </div>
   <div class="funnel">${ETAPAS.map(e=>{
     const col=leads.filter(l=>l.etapa===e.k).sort((a,b)=>tms(b.criadoEm)-tms(a.criadoEm));
     return `<div class="fcol"><div class="fcol-h"><span class="tag ${e.cls}">${e.label}</span><span class="fcount">${col.length}</span></div>
@@ -1002,10 +1104,12 @@ VIEWS.leads = function(){
 };
 function leadCard(l){
   const prox=proximaPergunta(l); const ativoFunil=!['ganho','perdido'].includes(l.etapa);
+  const uc=ultimoContatoLead(l.id);
   return `<div class="lcard" data-act="abrir-lead" data-id="${l.id}">
     <div class="lcard-nome">${esc(l.nome||'(sem nome)')}</div>
     <div class="lcard-sub">${esc([l.cidade,l.estado].filter(Boolean).join('/')||'—')} · ${esc(canalLabel(l.origem))}${l.telefone?' · '+esc(l.telefone):''}</div>
     ${l.reuniaoEm?`<div class="lcard-reu">📅 ${fmtDateTime(l.reuniaoEm)}</div>`:''}
+    ${uc?`<div class="lcard-sub">💬 último contato: ${fmtDateTime(uc)}</div>`:''}
     ${prox&&ativoFunil?`<div class="lcard-next">Falta perguntar: ${esc(faltaLabel(prox.campo))}</div>`:''}
   </div>`;
 }
@@ -1112,6 +1216,51 @@ function formLead(item){ const i=item||{};
     const obj={ id:i.id||uid(), nome, telefone:tel, email:val('nl-email'), cidade:val('nl-cidade'), estado:val('nl-uf'), comoConheceu:val('nl-como')||null, origem:i.origem||'manual', etapa:i.etapa||'novo', ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
     if(await save('leads',obj)){ await logAcao(item?'editar':'criar','Lead',obj.id,nome||tel); toast('Lead salvo'); await loadAll(); } });
 }
+
+/* ---------- Simulador do bot (testa a Edge Function pipo-bot) ---------- */
+function simularBot(){
+  const tel='5500000000001';
+  renderModal('🤖 Simulador do bot (WhatsApp)', `
+    <div class="mi-sub" style="margin-bottom:8px">Converse como se fosse um lead — usa o bot real e cria um lead de teste no funil (telefone ${tel}).</div>
+    <div class="chat" id="sim-chat"><div class="fempty">Mande a primeira mensagem (ex.: "oi") para começar.</div></div>
+    <div class="form-grid" style="margin-top:10px">
+      <div class="field full"><label>Sua mensagem (como lead)</label><input id="sim-msg" placeholder="digite e aperte Enter..."></div>
+    </div>`,
+    `<button class="btn ghost" data-sim-reset style="margin-right:auto">Zerar teste</button><button class="btn" data-close>Fechar</button><button class="btn primary" data-sim-send>Enviar</button>`);
+  const root=$('#modal-root');
+  let hist=[];
+  const inp=()=>document.getElementById('sim-msg');
+  const render=()=>{ const c=document.getElementById('sim-chat'); if(!c) return; c.innerHTML=hist.length?hist.map(m=>`<div class="msg ${m.dir==='out'?'out':'in'}">${esc(m.t)}<span class="meta">${m.dir==='out'?'bot':'você'}</span></div>`).join(''):'<div class="fempty">Mande a primeira mensagem para começar.</div>'; c.scrollTop=c.scrollHeight; };
+  async function send(){
+    const el=inp(); if(!el) return; const t=(el.value||'').trim(); if(!t) return; el.value='';
+    hist.push({dir:'in',t}); render();
+    try{
+      const { data, error } = await sb.functions.invoke('pipo-bot', { body:{ telefone:tel, mensagem:t } });
+      if(error) hist.push({dir:'out',t:'[erro: '+error.message+']'});
+      else if(data && data.reply) hist.push({dir:'out',t:data.reply});
+      else hist.push({dir:'out',t:'[sem resposta]'});
+    }catch(e){ hist.push({dir:'out',t:'[erro: '+e+']'}); }
+    render(); loadAll();
+  }
+  root.querySelector('[data-sim-send]').addEventListener('click',send);
+  const el=inp(); if(el) el.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); send(); } });
+  root.querySelector('[data-sim-reset]').addEventListener('click', async ()=>{
+    const L=state.leads.find(x=>x.telefone===tel);
+    if(L && await save('leads',{...L, botPasso:null, etapa:'novo', nome:null, cidade:null, estado:null, capitalOk:null, perfil:null, pontoOk:null, prazo:null, qtdMaquinas:null, ativo:false, atualizadoEm:new Date().toISOString()})) await loadAll();
+    hist=[]; render(); toast('Conversa de teste zerada');
+  });
+}
+
+/* ---------- PWA (instalável no desktop e celular) ---------- */
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{})); }
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt=e; const b=$('#install-btn'); if(b) b.style.display=''; });
+document.body.addEventListener('click', async e=>{
+  const b=e.target.closest('#install-btn'); if(!b) return;
+  if(!deferredPrompt){ toast('No iPhone: use Compartilhar → "Adicionar à Tela de Início".'); return; }
+  deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; b.style.display='none';
+});
+window.addEventListener('appinstalled', ()=>{ const b=$('#install-btn'); if(b) b.style.display='none'; toast('App instalado! 🍿'); });
 
 /* ---------- boot ---------- */
 boot();
