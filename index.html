@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipó Power System</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --red:#D83A2B; --red-dk:#B22C20; --butter:#F4B400; --butter-dk:#D99A00;
+    --cream:#FFF8EC; --panel:#FFFFFF; --ink:#2A2118; --muted:#8A7E6B;
+    --line:#ECE2D0; --line-dk:#D9CBB2;
+    --green:#1F7A4D; --green-bg:#E6F3EC; --amber:#9A6B00; --amber-bg:#FBF0D6;
+    --blue:#2D6CB5; --blue-bg:#E7F0FA; --danger:#B8352A; --danger-bg:#FBE9E7;
+    --shadow:0 1px 2px rgba(42,33,24,.06),0 4px 16px rgba(42,33,24,.06);
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--cream);color:var(--ink);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{margin:0;font-weight:700}
+  a{color:var(--blue);text-decoration:none}
+  button{font-family:inherit;cursor:pointer}
+  .hidden{display:none !important}
+
+  header.app{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--panel);
+    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;letter-spacing:-.2px}
+  .brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--red),var(--butter));
+    display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:var(--shadow)}
+  .brand small{display:block;font-size:10.5px;font-weight:600;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+  .spacer{flex:1}
+  .userbox{display:flex;align-items:center;gap:10px;font-size:12.5px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--butter);color:#4a3a00;font-weight:800;
+    display:flex;align-items:center;justify-content:center;font-size:13px}
+  .role-badge{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px}
+  .role-gestao{background:var(--green-bg);color:var(--green)}
+  .role-view{background:var(--blue-bg);color:var(--blue)}
+
+  .shell{display:flex;min-height:calc(100vh - 59px)}
+  nav.side{width:210px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);padding:12px 10px}
+  nav.side .nav-item{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;color:var(--ink);
+    font-weight:600;font-size:13.5px;cursor:pointer;margin-bottom:2px;user-select:none}
+  nav.side .nav-item .ico{width:18px;text-align:center;font-size:15px;opacity:.9}
+  nav.side .nav-item:hover{background:var(--cream)}
+  nav.side .nav-item.active{background:linear-gradient(135deg,rgba(216,58,43,.12),rgba(244,180,0,.14));color:var(--red-dk)}
+  nav.side .nav-sep{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.5px;padding:14px 11px 5px}
+  main.content{flex:1;padding:22px 26px;min-width:0;max-width:1280px}
+
+  .page-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+  .page-head h2{font-size:20px}
+  .page-head p{margin:3px 0 0;color:var(--muted);font-size:12.5px}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-dk);background:var(--panel);
+    color:var(--ink);padding:8px 13px;border-radius:9px;font-weight:600;font-size:13px;transition:.12s}
+  .btn:hover{background:var(--cream)}
+  .btn.primary{background:var(--red);border-color:var(--red);color:#fff}
+  .btn.primary:hover{background:var(--red-dk)}
+  .btn.sm{padding:5px 9px;font-size:12px;border-radius:7px}
+  .btn.ghost{border-color:transparent;background:transparent}
+  .btn.ghost:hover{background:var(--cream)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .panel .ph{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .panel .ph h3{font-size:14.5px}
+  .panel .pb{padding:4px 0}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:14px;margin-bottom:20px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;box-shadow:var(--shadow)}
+  .kpi .lab{font-size:11.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:6px}
+  .kpi .val{font-size:23px;font-weight:800;margin-top:7px;letter-spacing:-.5px}
+  .kpi .sub{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .kpi .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  thead th{text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;
+    padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--panel)}
+  tbody td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--cream)}
+  tbody tr.inativo{opacity:.5}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px}
+  .tag.ok{background:var(--green-bg);color:var(--green)}
+  .tag.prev{background:var(--amber-bg);color:var(--amber)}
+  .tag.off{background:#efe9df;color:var(--muted)}
+  .tag.roy{background:var(--blue-bg);color:var(--blue)}
+  .tag.taxa{background:#f3e8fb;color:#7a3ea8}
+  .cell-sub{font-size:11.5px;color:var(--muted)}
+  .row-actions{display:flex;gap:4px;justify-content:flex-end}
+  .empty{padding:40px 20px;text-align:center;color:var(--muted)}
+  .empty .big{font-size:30px;margin-bottom:8px}
+
+  .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+  input,select,textarea{font-family:inherit;font-size:13px;color:var(--ink);background:var(--panel);
+    border:1px solid var(--line-dk);border-radius:8px;padding:8px 10px;outline:none;transition:.12s;width:100%}
+  input:focus,select:focus,textarea:focus{border-color:var(--butter-dk);box-shadow:0 0 0 3px rgba(244,180,0,.18)}
+  input[type=checkbox]{width:auto}
+  .toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer}
+
+  .overlay{position:fixed;inset:0;background:rgba(42,33,24,.42);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow-y:auto}
+  .modal{background:var(--panel);border-radius:14px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:pop .15s ease}
+  @keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+  .modal .mh{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+  .modal .mh h3{font-size:16px}
+  .modal .mh .x{margin-left:auto;font-size:20px;color:var(--muted);background:none;border:none;line-height:1}
+  .modal .mb{padding:18px 20px;max-height:66vh;overflow-y:auto}
+  .modal .mf{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:9px;justify-content:flex-end;background:var(--cream);border-radius:0 0 14px 14px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .form-grid .full{grid-column:1 / -1}
+  .hint{font-size:11px;color:var(--muted)}
+
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,.25);
+    z-index:80;opacity:0;pointer-events:none;transition:.2s}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.err{background:var(--danger)}
+
+  .banner{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;font-size:12.5px;font-weight:600;margin-bottom:16px}
+  .banner.warn{background:var(--amber-bg);color:var(--amber)}
+  .banner.info{background:var(--blue-bg);color:var(--blue)}
+
+  .bars{display:flex;flex-direction:column;gap:9px;padding:14px 16px}
+  .bar-row{display:grid;grid-template-columns:120px 1fr 90px;align-items:center;gap:10px;font-size:12.5px}
+  .bar-track{height:12px;background:var(--cream);border-radius:20px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--butter),var(--red))}
+  .bar-val{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+  .attach-pill{display:inline-flex;align-items:center;gap:6px;background:var(--cream);border:1px solid var(--line-dk);
+    padding:5px 9px;border-radius:8px;font-size:12px;cursor:pointer}
+
+  /* login */
+  #login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+    background:radial-gradient(1200px 600px at 50% -10%, #fff 0%, var(--cream) 60%)}
+  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:380px;padding:30px 28px}
+  .login-card .logo{width:54px;height:54px;border-radius:14px;background:linear-gradient(135deg,var(--red),var(--butter));
+    display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px;box-shadow:var(--shadow)}
+  .login-card h1{font-size:20px;text-align:center}
+  .login-card .tag-line{text-align:center;color:var(--muted);font-size:12.5px;margin:4px 0 22px}
+  .login-card .field{margin-bottom:14px}
+  .login-card .btn.primary{width:100%;justify-content:center;padding:11px}
+  .login-err{background:var(--danger-bg);color:var(--danger);font-size:12.5px;font-weight:600;padding:9px 12px;border-radius:8px;margin-bottom:14px}
+  @media (max-width:760px){ nav.side{display:none} main.content{padding:16px} .form-grid{grid-template-columns:1fr} }
+/* ===== CRM / Leads ===== */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.kpi{background:#fff;border:1px solid #eadfce;border-radius:12px;padding:12px 14px}
+.kpi .v{font-size:22px;font-weight:800;color:#3b2f1c}
+.kpi .l{font-size:12px;color:#8a7a63}
+.funnel{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
+.fcol{min-width:215px;flex:1 0 215px;background:#f7f1e6;border:1px solid #eadfce;border-radius:12px;padding:10px}
+.fcol-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.fcount{font-weight:800;color:#8a7a63}
+.fcol-b{display:flex;flex-direction:column;gap:8px;min-height:40px}
+.lcard{background:#fff;border:1px solid #eadfce;border-radius:10px;padding:9px 10px;cursor:pointer;transition:.15s}
+.lcard:hover{border-color:#c9a24a;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.lcard-nome{font-weight:700;color:#3b2f1c}
+.lcard-sub{font-size:12px;color:#8a7a63}
+.lcard-reu{font-size:12px;color:#1f7a3d;margin-top:3px;font-weight:600}
+.lcard-next{font-size:11px;color:#b06a00;margin-top:3px}
+.fempty{color:#bbae97;font-size:13px;text-align:center;padding:6px}
+.chat{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;padding:8px;background:#f7f1e6;border-radius:10px}
+.msg{max-width:82%;padding:7px 10px;border-radius:10px;font-size:13px;line-height:1.35}
+.msg.in{align-self:flex-start;background:#fff;border:1px solid #eadfce}
+.msg.out{align-self:flex-end;background:#d9f0df}
+.msg .meta{display:block;font-size:10px;color:#8a7a63;margin-top:3px}
+.botbox{background:#fff8e8;border:1px solid #f0dca0;border-radius:10px;padding:10px;font-size:13px;color:#5b4a2a}
+</style>
+</head>
+<body>
+
+<div id="login" class="hidden">
+  <form class="login-card" id="login-form" autocomplete="on">
+    <div class="logo">🍿</div>
+    <h1>Pipó Power System</h1>
+    <div class="tag-line">Franqueadora · acesso restrito</div>
+    <div id="login-err" class="login-err hidden"></div>
+    <div class="field"><label>E-mail</label><input id="lg-email" type="email" autocomplete="username" required></div>
+    <div class="field"><label>Senha</label><input id="lg-pass" type="password" autocomplete="current-password" required></div>
+    <button class="btn primary" type="submit" id="lg-btn">Entrar</button>
+    <p class="hint" style="text-align:center;margin:16px 0 0">Acesso só para sócios e financeiro.</p>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <header class="app">
+    <div class="brand"><div class="logo">🍿</div><div>Pipó Power System<small>Franqueadora · Fluxo de caixa</small></div></div>
+    <div class="spacer"></div>
+    <div class="userbox" id="userbox"></div>
+    <button class="btn sm ghost" id="logout-btn" title="Sair">Sair</button>
+  </header>
+  <div class="shell">
+    <nav class="side" id="nav">
+      <div class="nav-sep">Operação</div>
+      <div class="nav-item active" data-view="painel"><span class="ico">📊</span> Painel / Fluxo</div>
+      <div class="nav-item" data-view="dashboard"><span class="ico">📈</span> Dashboard</div>
+      <div class="nav-item" data-view="franqueados"><span class="ico">👥</span> Franqueados</div>
+      <div class="nav-item" data-view="unidades"><span class="ico">🏪</span> Unidades</div>
+      <div class="nav-item" data-view="vendas"><span class="ico">🧾</span> Vendas</div>
+      <div class="nav-sep">Comercial</div>
+      <div class="nav-item" data-view="leads"><span class="ico">🎯</span> Leads / Funil</div>
+      <div class="nav-sep">Financeiro</div>
+      <div class="nav-item" data-view="receitas"><span class="ico">💰</span> Receitas</div>
+      <div class="nav-item" data-view="despesas"><span class="ico">📉</span> Despesas</div>
+      <div class="nav-item" data-view="aportes"><span class="ico">🤝</span> Aportes</div>
+      <div class="nav-sep">Arquivo</div>
+      <div class="nav-item" data-view="documentos"><span class="ico">📁</span> Documentos</div>
+      <div class="nav-item" data-view="registros"><span class="ico">🕑</span> Registros</div>
+      <div class="nav-item" data-view="usuarios"><span class="ico">🔑</span> Usuários</div>
+      <div class="nav-item" data-view="config"><span class="ico">⚙️</span> Configurações</div>
+    </nav>
+    <main class="content" id="main"></main>
+  </div>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ===================== Pipó Power System ===================== */
+const SUPABASE_URL = "https://axxpeuihqfsucpbzohas.supabase.co";
+const SUPABASE_KEY = "sb_publishable_6ywi2eGcmLmk75oS44PjDQ_iWkrxKUp";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const TABLES = ["franqueados","unidades","vendas","receitas","despesas","aportes","documentos","log","usuarios","leads","lead_mensagens"];
+const state = {
+  franqueados:[], unidades:[], vendas:[], receitas:[], despesas:[], aportes:[], documentos:[], log:[], usuarios:[],
+  leads:[], leadMensagens:[],
+  config:{ royaltyPct:8, royaltyMinimo:1200, diaVencimento:10, taxaFranquia:25000 },
+  me:null, myId:null, myEmail:null, perfil:'visualizacao', canEdit:false, isMaster:false,
+  view:"painel", filtros:{ compMes:"", regiao:"", franqueado:"", status:"" }, showInativos:false
+};
+
+/* ---------- helpers ---------- */
+const $ = (s,r=document)=>r.querySelector(s);
+const uid = ()=> (crypto.randomUUID ? crypto.randomUUID() : 'id'+Date.now()+Math.random().toString(16).slice(2));
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const brl = n => (Number(n)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const todayISO = ()=> new Date().toISOString().slice(0,10);
+const monthKey = (d=new Date())=> (typeof d==='string'? d.slice(0,7) : d.toISOString().slice(0,7));
+const tms = x => { if(!x) return 0; const d=new Date(x); return isNaN(d)?0:d.getTime(); };
+function fmtDate(iso){ if(!iso) return '—'; const d=new Date(iso); if(isNaN(d)) return esc(iso);
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'UTC'}); }
+function fmtDateTime(ts){ if(!ts) return '—'; const d=new Date(ts); if(isNaN(d)) return '—';
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+function monthLabel(mk){ if(!mk) return '—'; const [y,m]=String(mk).split('-');
+  const nomes=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  return (nomes[(+m)-1]||m)+'/'+y; }
+function toast(msg,isErr){ const t=$('#toast'); t.textContent=msg; t.className='show'+(isErr?' err':'');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='',3000); }
+
+/* ---------- snake/camel mapping ---------- */
+const toSnake = k => k.replace(/([A-Z])/g,'_$1').toLowerCase();
+const toCamel = k => k.replace(/_([a-z])/g,(_,c)=>c.toUpperCase());
+function fromRow(row){ const o={}; for(const k in row) o[toCamel(k)]=row[k]; return o; }
+function toRow(obj){ const o={}; for(const k in obj){ if(obj[k]!==undefined) o[toSnake(k)]=obj[k]; } return o; }
+
+/* ---------- data access ---------- */
+async function loadAll(){
+  const names = TABLES.map(t=>'pipo_'+t);
+  const [fr,un,vd,rc,dp,ap,dc,lg,us,cfg,ld,lm] = await Promise.all([
+    sb.from('pipo_franqueados').select('*'),
+    sb.from('pipo_unidades').select('*'),
+    sb.from('pipo_vendas').select('*'),
+    sb.from('pipo_receitas').select('*'),
+    sb.from('pipo_despesas').select('*'),
+    sb.from('pipo_aportes').select('*'),
+    sb.from('pipo_documentos').select('*'),
+    sb.from('pipo_log').select('*').order('em',{ascending:false}).limit(400),
+    sb.from('pipo_usuarios').select('*'),
+    sb.from('pipo_config').select('*').eq('id','geral').maybeSingle(),
+    sb.from('pipo_leads').select('*'),
+    sb.from('pipo_lead_mensagens').select('*').order('em',{ascending:true})
+  ]);
+  const err = [fr,un,vd,rc,dp,ap,dc,lg,us].find(r=>r.error);
+  if(err && err.error){ toast('Erro ao carregar: '+err.error.message, true); }
+  state.franqueados=(fr.data||[]).map(fromRow);
+  state.unidades=(un.data||[]).map(fromRow);
+  state.vendas=(vd.data||[]).map(fromRow);
+  state.receitas=(rc.data||[]).map(fromRow);
+  state.despesas=(dp.data||[]).map(fromRow);
+  state.aportes=(ap.data||[]).map(fromRow);
+  state.documentos=(dc.data||[]).map(fromRow);
+  state.log=(lg.data||[]).map(fromRow);
+  state.usuarios=(us.data||[]).map(fromRow);
+  state.leads=(ld&&ld.data||[]).map(fromRow);
+  state.leadMensagens=(lm&&lm.data||[]).map(fromRow);
+  if(cfg && cfg.data) state.config={...state.config, ...fromRow(cfg.data)};
+  renderApp();
+}
+async function save(table, obj){
+  const { error } = await sb.from('pipo_'+table).upsert(toRow(obj));
+  if(error){ toast('Erro ao salvar: '+error.message, true); return false; }
+  return true;
+}
+async function logAcao(acao, entidade, entidadeId, resumo){
+  await sb.from('pipo_log').insert(toRow({ id:uid(), em:new Date().toISOString(), usuarioId:state.myId, acao, entidade, entidadeId, resumo }));
+}
+
+/* ---------- auth ---------- */
+async function boot(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){ await afterLogin(); } else { showLogin(); }
+  sb.auth.onAuthStateChange((_e, s)=>{ /* keep simple: handled explicitly */ });
+}
+function showLogin(){ $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); }
+async function afterLogin(){
+  const { data:{ user } } = await sb.auth.getUser();
+  state.myId = user?.id; state.myEmail = user?.email;
+  // provisiona o papel (primeiro usuário vira gestão)
+  const { data:me } = await sb.rpc('pipo_ensure_me', { p_nome: null });
+  const row = Array.isArray(me)? me[0] : me;
+  if(row){ state.perfil = row.perfil || 'visualizacao'; state.isMaster = !!row.is_master; }
+  state.canEdit = state.perfil==='gestao';
+  if(state.perfil!=='gestao') state.isMaster=false;
+  $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
+  await loadAll();
+}
+$('#login-form').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const email=$('#lg-email').value.trim(), pass=$('#lg-pass').value;
+  const btn=$('#lg-btn'); btn.disabled=true; btn.textContent='Entrando…';
+  const errBox=$('#login-err'); errBox.classList.add('hidden');
+  const { error } = await sb.auth.signInWithPassword({ email, password:pass });
+  btn.disabled=false; btn.textContent='Entrar';
+  if(error){ errBox.textContent = traduzErro(error.message); errBox.classList.remove('hidden'); return; }
+  await afterLogin();
+});
+function traduzErro(m){ if(/Invalid login/i.test(m)) return 'E-mail ou senha incorretos.';
+  if(/Email not confirmed/i.test(m)) return 'E-mail ainda não confirmado.'; return m; }
+$('#logout-btn').addEventListener('click', async ()=>{ await sb.auth.signOut(); location.reload(); });
+
+/* ---------- lookups ---------- */
+const franqById = id => state.franqueados.find(f=>f.id===id);
+const unidById  = id => state.unidades.find(u=>u.id===id);
+const ativos = arr => arr.filter(x=>x.ativo!==false);
+function regioesDisponiveis(){ const s=new Set(); ativos(state.unidades).forEach(u=>{ if(u.estado) s.add(u.estado); }); return [...s].sort(); }
+function royaltyProjetado(venda){
+  const u=unidById(venda.unidadeId); if(!u) return 0;
+  const pct=(u.royaltyPct ?? state.config.royaltyPct ?? 8);
+  const calc=(Number(venda.valor)||0)*pct/100;
+  const min=(u.royaltyMinimo ?? state.config.royaltyMinimo ?? 0);
+  return Math.max(calc,min);
+}
+// Resumo de capital/aportes (vida inteira, não por competência)
+function capitalResumo(){
+  const sum=a=>a.reduce((s,x)=>s+(Number(x.valor)||0),0);
+  const aportesTotal   = sum(ativos(state.aportes));
+  const recebidoLife   = sum(ativos(state.receitas).filter(r=>r.status==='recebido'));
+  const pagoLife       = sum(ativos(state.despesas).filter(d=>d.status==='pago'));
+  const previstoReceber= sum(ativos(state.receitas).filter(r=>r.status!=='recebido'));
+  const emAberto       = sum(ativos(state.despesas).filter(d=>d.status!=='pago'));
+  const caixaAtual     = aportesTotal + recebidoLife - pagoLife;          // caixa disponível hoje
+  const resultadoOper  = recebidoLife - pagoLife;                          // operação (sem aporte)
+  const capitalUtilizado = Math.max(0, -resultadoOper);                    // quanto do aporte foi consumido
+  const pctUtil        = aportesTotal>0 ? Math.min(100, Math.round(capitalUtilizado/aportesTotal*100)) : 0;
+  const caixaProjetado = caixaAtual + previstoReceber - emAberto;          // depois de liquidar tudo
+  const necessidadeAporte = Math.max(0, -caixaProjetado);
+  return { aportesTotal, recebidoLife, pagoLife, previstoReceber, emAberto, caixaAtual, resultadoOper, capitalUtilizado, pctUtil, caixaProjetado, necessidadeAporte };
+}
+function miniBars(rows, fmt){
+  if(!rows.length) return `<div class="empty" style="padding:24px">Sem dados.</div>`;
+  const max=Math.max(1,...rows.map(r=>Number(r[1])||0));
+  return `<div class="bars">${rows.map(([l,v])=>`<div class="bar-row"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(l)}">${esc(l)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round((Number(v)||0)/max*100)}%"></div></div><div class="bar-val">${fmt?fmt(v):v}</div></div>`).join('')}</div>`;
+}
+
+/* ---------- render shell ---------- */
+function renderApp(){ renderUserbox(); renderNav(); renderCurrent(); }
+function renderUserbox(){
+  const nm = state.myEmail || '—';
+  const initials=(state.myEmail||'P').trim().slice(0,1).toUpperCase();
+  const roleTxt=roleLabelMe(), roleCls=state.canEdit?'role-gestao':'role-view';
+  $('#userbox').innerHTML=`<div class="avatar">${esc(initials)}</div>
+    <div><div style="font-weight:700">${esc(nm)}</div><span class="role-badge ${roleCls}">${roleTxt}</span></div>`;
+}
+function roleLabelMe(){ return state.isMaster?'Master':(state.canEdit?'Financeiro':'Visualização'); }
+function roleLabel(perfil,isMaster){ if(perfil==='gestao') return isMaster?'Master':'Financeiro'; return 'Visualização'; }
+function roleTag(perfil,isMaster){ const l=roleLabel(perfil,isMaster);
+  const cls = l==='Master'?'taxa':(l==='Financeiro'?'ok':'roy'); return `<span class="tag ${cls}">${l}</span>`; }
+function renderNav(){ $('#nav').querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===state.view)); }
+
+const VIEWS={};
+function renderCurrent(){ const fn=VIEWS[state.view]||VIEWS.painel; $('#main').innerHTML=fn(); wireView(); }
+function readOnlyNote(){ if(state.canEdit) return '';
+  return `<div class="banner info">👁️ Seu acesso é <b>somente visualização</b>. Você consulta e filtra tudo, mas não lança nem altera. Um gestor pode liberar seu perfil em Usuários.</div>`; }
+
+/* ---------------- DASHBOARD ---------------- */
+VIEWS.dashboard = function(){
+  const cap=capitalResumo();
+  const sum=a=>a.reduce((s,x)=>s+(Number(x.valor)||0),0);
+  const fr=ativos(state.franqueados), un=ativos(state.unidades), vd=ativos(state.vendas), rc=ativos(state.receitas), dp=ativos(state.despesas);
+  const vendasTotal=sum(vd), recebido=sum(rc.filter(r=>r.status==='recebido')), pago=sum(dp.filter(d=>d.status==='pago'));
+  const unidImpl=un.filter(u=>u.status==='implantacao').length;
+  // Fluxo mensal realizado (entradas = receitas recebidas + aportes; saídas = despesas pagas)
+  const meses=mesesComMovimento();
+  const mesRows=meses.map(mk=>{
+    const ent=sum(rc.filter(r=>r.competencia===mk && r.status==='recebido'))+sum(ativos(state.aportes).filter(a=>a.competencia===mk));
+    const sai=sum(dp.filter(d=>d.competencia===mk && d.status==='pago'));
+    return {mk,ent,sai,saldo:ent-sai};
+  });
+  const maxFluxo=Math.max(1,...mesRows.map(r=>Math.max(r.ent,r.sai)));
+  const royalties=sum(rc.filter(r=>r.tipo==='royalty')), taxas=sum(rc.filter(r=>r.tipo==='taxa_franquia'));
+  const porCat={}; dp.forEach(d=>{ const c=d.categoria||'Outros'; porCat[c]=(porCat[c]||0)+(Number(d.valor)||0); });
+  const catRows=Object.entries(porCat).sort((a,b)=>b[1]-a[1]);
+  const porEst={}; un.forEach(u=>{ const e=u.estado||'—'; porEst[e]=(porEst[e]||0)+1; });
+  const estRows=Object.entries(porEst).sort((a,b)=>b[1]-a[1]);
+  const porFranq={}; vd.forEach(v=>{ const u=unidById(v.unidadeId); const f=franqById(u?.franqueadoId); const nm=f?f.nome:'—'; porFranq[nm]=(porFranq[nm]||0)+(Number(v.valor)||0); });
+  const franqRows=Object.entries(porFranq).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const unidComVenda=new Set(vd.map(v=>v.unidadeId)).size;
+  const ticket=unidComVenda?vendasTotal/unidComVenda:0;
+  return `
+  <div class="page-head"><div><h2>Dashboard</h2><p>Indicadores da rede, das receitas, das despesas e do capital — visão acumulada.</p></div></div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="lab">Franqueados</div><div class="val">${fr.length}</div></div>
+    <div class="kpi"><div class="lab">Unidades</div><div class="val">${un.length}</div><div class="sub">${unidImpl} em implantação</div></div>
+    <div class="kpi"><div class="lab">Vendas acumuladas</div><div class="val">${brl(vendasTotal)}</div><div class="sub">ticket médio/unidade ${brl(ticket)}</div></div>
+    <div class="kpi"><div class="lab">Receita recebida</div><div class="val" style="color:var(--green)">${brl(recebido)}</div></div>
+    <div class="kpi"><div class="lab">Despesas pagas</div><div class="val" style="color:var(--danger)">${brl(pago)}</div></div>
+    <div class="kpi"><div class="lab">Aportes</div><div class="val" style="color:#7a3ea8">${brl(cap.aportesTotal)}</div></div>
+    <div class="kpi"><div class="lab">Caixa atual</div><div class="val">${brl(cap.caixaAtual)}</div></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px">
+    <div class="ph"><h3>Entradas × saídas por mês</h3><div class="spacer"></div>
+      <span class="tag ok" style="background:var(--green-bg);color:var(--green)">entradas</span>
+      <span class="tag" style="background:var(--danger-bg);color:var(--danger)">saídas</span></div>
+    <div style="padding:14px 16px">${mesRows.length?mesRows.map(r=>`
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px"><b>${monthLabel(r.mk)}</b><span class="cell-sub">saldo ${brl(r.saldo)}</span></div>
+        <div class="bar-track" style="height:10px;margin-bottom:4px"><div class="bar-fill" style="width:${Math.round(r.ent/maxFluxo*100)}%;background:var(--green)"></div></div>
+        <div class="bar-track" style="height:10px"><div class="bar-fill" style="width:${Math.round(r.sai/maxFluxo*100)}%;background:var(--danger)"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:3px"><span>entradas ${brl(r.ent)}</span><span>saídas ${brl(r.sai)}</span></div>
+      </div>`).join(''):`<div class="empty">Sem movimento.</div>`}</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="panel"><div class="ph"><h3>Receitas por tipo</h3></div>${miniBars([['Royalties',royalties],['Taxa de franquia',taxas]], brl)}</div>
+    <div class="panel"><div class="ph"><h3>Despesas por categoria</h3></div>${miniBars(catRows, brl)}</div>
+    <div class="panel"><div class="ph"><h3>Unidades por estado</h3></div>${miniBars(estRows, v=>v+' un.')}</div>
+    <div class="panel"><div class="ph"><h3>Faturamento por franqueado</h3></div>${miniBars(franqRows, brl)}</div>
+  </div>`;
+};
+
+/* ---------------- PAINEL ---------------- */
+VIEWS.painel = function(){
+  const f=state.filtros; const mk=f.compMes||monthKey();
+  const sum=a=>a.reduce((s,x)=>s+(Number(x.valor)||0),0);
+  const recRecebida=ativos(state.receitas).filter(r=>r.competencia===mk && r.status==='recebido');
+  const recPrev=ativos(state.receitas).filter(r=>r.competencia===mk && r.status!=='recebido');
+  const despMes=ativos(state.despesas).filter(d=>d.competencia===mk);
+  const despPagas=despMes.filter(d=>d.status==='pago');
+  const totRecebido=sum(recRecebida), totPrev=sum(recPrev), totReceita=totRecebido+totPrev;
+  const totDesp=sum(despMes), totDespPago=sum(despPagas);
+  const saldoReal=totRecebido-totDespPago, saldoProj=totReceita-totDesp;
+  const vendasMes=ativos(state.vendas).filter(v=>monthKey(v.competencia)===mk);
+  const royProj=vendasMes.reduce((s,v)=>s+royaltyProjetado(v),0);
+  const porRegiao={};
+  ativos(state.receitas).filter(r=>r.competencia===mk).forEach(r=>{ const u=unidById(r.unidadeId); const est=u?.estado||'—'; porRegiao[est]=(porRegiao[est]||0)+(Number(r.valor)||0); });
+  const regRows=Object.entries(porRegiao).sort((a,b)=>b[1]-a[1]); const regMax=Math.max(1,...regRows.map(r=>r[1]));
+  const mesesOpts=mesesComMovimento();
+  const cap=capitalResumo();
+  return `${readOnlyNote()}
+  <div class="page-head">
+    <div><h2>Painel da franqueadora</h2><p>Fluxo de caixa consolidado — receitas (royalties + taxa de franquia) e despesas da Pipó.</p></div>
+    <div class="spacer"></div>
+    <div class="field"><label>Competência</label><select id="f-comp">${mesesOpts.map(m=>`<option value="${m}" ${m===mk?'selected':''}>${monthLabel(m)}</option>`).join('')}</select></div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="lab"><span class="dot" style="background:var(--green)"></span> Receita recebida</div><div class="val" style="color:var(--green)">${brl(totRecebido)}</div><div class="sub">Previsto a receber: ${brl(totPrev)}</div></div>
+    <div class="kpi"><div class="lab"><span class="dot" style="background:var(--danger)"></span> Despesas</div><div class="val" style="color:var(--danger)">${brl(totDesp)}</div><div class="sub">Pagas: ${brl(totDespPago)}</div></div>
+    <div class="kpi"><div class="lab"><span class="dot" style="background:var(--butter)"></span> Saldo realizado</div><div class="val">${brl(saldoReal)}</div><div class="sub">Projetado: ${brl(saldoProj)}</div></div>
+    <div class="kpi"><div class="lab"><span class="dot" style="background:var(--blue)"></span> Royalties projetados</div><div class="val" style="color:var(--blue)">${brl(royProj)}</div><div class="sub">${vendasMes.length} venda(s) na competência</div></div>
+  </div>
+  <div class="panel" style="margin-bottom:20px">
+    <div class="ph"><h3>Capital dos sócios (aportes)</h3><div class="spacer"></div><span class="cell-sub">visão acumulada</span></div>
+    <div style="padding:16px">
+      <div class="kpi-grid" style="margin-bottom:14px">
+        <div class="kpi"><div class="lab"><span class="dot" style="background:#7a3ea8"></span> Aportes acumulados</div><div class="val" style="color:#7a3ea8">${brl(cap.aportesTotal)}</div><div class="sub">capital injetado pelos sócios</div></div>
+        <div class="kpi"><div class="lab"><span class="dot" style="background:var(--green)"></span> Caixa atual</div><div class="val">${brl(cap.caixaAtual)}</div><div class="sub">aportes + recebido − pago</div></div>
+        <div class="kpi"><div class="lab"><span class="dot" style="background:var(--amber)"></span> Capital utilizado</div><div class="val" style="color:var(--amber)">${brl(cap.capitalUtilizado)}</div><div class="sub">${cap.pctUtil}% do aporte consumido</div></div>
+      </div>
+      <div class="bar-row" style="grid-template-columns:150px 1fr 60px">
+        <div style="font-weight:600">Uso do capital</div>
+        <div class="bar-track" style="height:14px"><div class="bar-fill" style="width:${cap.pctUtil}%;background:linear-gradient(90deg,var(--amber),var(--red))"></div></div>
+        <div class="bar-val">${cap.pctUtil}%</div>
+      </div>
+      ${cap.necessidadeAporte>0
+        ? `<div class="banner warn" style="margin:14px 0 0">⚠️ <b>Necessidade de novo aporte:</b> o caixa projetado fica negativo em ${brl(cap.necessidadeAporte)} após liquidar o previsto a receber (${brl(cap.previstoReceber)}) e as despesas em aberto (${brl(cap.emAberto)}).</div>`
+        : `<div class="banner info" style="margin:14px 0 0">✅ Caixa projetado positivo (${brl(cap.caixaProjetado)}) após liquidar previsto a receber e despesas em aberto — sem necessidade de novo aporte no momento.</div>`}
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="panel"><div class="ph"><h3>Receita por região (${monthLabel(mk)})</h3></div>
+      ${regRows.length?`<div class="bars">${regRows.map(([est,v])=>`<div class="bar-row"><div style="font-weight:600">${esc(est)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v/regMax*100)}%"></div></div><div class="bar-val">${brl(v)}</div></div>`).join('')}</div>`:`<div class="empty"><div class="big">🗺️</div>Sem receitas nesta competência.</div>`}</div>
+    <div class="panel"><div class="ph"><h3>Resumo da rede</h3></div><div class="pb"><table><tbody>
+      <tr><td>Franqueados ativos</td><td class="num"><b>${ativos(state.franqueados).length}</b></td></tr>
+      <tr><td>Unidades ativas</td><td class="num"><b>${ativos(state.unidades).length}</b></td></tr>
+      <tr><td>Royalty padrão</td><td class="num"><b>${state.config.royaltyPct}%</b> <span class="cell-sub">· mín. ${brl(state.config.royaltyMinimo)}</span></td></tr>
+      <tr><td>Taxa de franquia padrão</td><td class="num"><b>${brl(state.config.taxaFranquia)}</b></td></tr>
+      <tr><td>Receitas no mês</td><td class="num"><b>${brl(totReceita)}</b></td></tr>
+    </tbody></table></div></div>
+  </div>
+  <div class="panel" style="margin-top:16px"><div class="ph"><h3>Últimos lançamentos</h3></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Quando</th><th>Tipo</th><th>Descrição</th><th class="num">Valor</th></tr></thead>
+    <tbody>${ultimosLancamentos().map(l=>`<tr><td class="cell-sub">${fmtDateTime(l.ts)}</td><td>${l.tipo}</td><td>${esc(l.desc)}</td><td class="num">${l.valor!=null?brl(l.valor):'—'}</td></tr>`).join('')||`<tr><td colspan="4" class="empty">Nenhum lançamento ainda.</td></tr>`}</tbody></table></div></div>`;
+};
+function mesesComMovimento(){ const s=new Set([monthKey()]);
+  ['receitas','despesas'].forEach(c=>ativos(state[c]).forEach(x=>{ if(x.competencia) s.add(x.competencia); }));
+  ativos(state.vendas).forEach(v=>{ if(v.competencia) s.add(monthKey(v.competencia)); });
+  return [...s].sort().reverse(); }
+function ultimosLancamentos(){ const out=[];
+  ativos(state.receitas).forEach(r=>out.push({ts:r.criadoEm,tipo:r.tipo==='taxa_franquia'?'Taxa franquia':'Royalty',desc:descReceita(r),valor:r.valor}));
+  ativos(state.despesas).forEach(d=>out.push({ts:d.criadoEm,tipo:'Despesa',desc:d.descricao,valor:-Math.abs(d.valor)}));
+  return out.filter(x=>x.ts).sort((a,b)=>tms(b.ts)-tms(a.ts)).slice(0,8); }
+function descReceita(r){ const u=unidById(r.unidadeId); const f=franqById(r.franqueadoId||u?.franqueadoId);
+  const base=r.tipo==='taxa_franquia'?'Taxa de franquia':'Royalty '+monthLabel(r.competencia);
+  return base+(u?` · ${u.codigo||u.apelido||''}`:'')+(f?` · ${f.nome}`:''); }
+
+/* ---------------- FRANQUEADOS ---------------- */
+VIEWS.franqueados = function(){
+  const list=state.showInativos?state.franqueados:ativos(state.franqueados);
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Franqueados</h2><p>Cada franqueado pode ter uma ou mais unidades vinculadas.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="novo-franqueado">+ Novo franqueado</button>`:''}</div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Franqueado</th><th>Documento</th><th>Contato</th><th>Praça</th><th class="num">Unidades</th><th class="num">Status</th><th></th></tr></thead>
+    <tbody>${list.length?list.slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(f=>{
+      const un=ativos(state.unidades).filter(u=>u.franqueadoId===f.id).length;
+      return `<tr class="${f.ativo===false?'inativo':''}"><td><b>${esc(f.nome)}</b></td><td class="cell-sub">${esc(f.documento||'—')}</td><td class="cell-sub">${esc(f.contato||'—')}</td><td>${esc([f.cidade,f.estado].filter(Boolean).join(' / ')||'—')}</td><td class="num">${un}</td><td class="num">${f.ativo===false?'<span class="tag off">Inativo</span>':'<span class="tag ok">Ativo</span>'}</td><td><div class="row-actions">${rowActions('franqueado',f)}</div></td></tr>`;}).join('')
+      :`<tr><td colspan="7"><div class="empty"><div class="big">👥</div>Nenhum franqueado cadastrado.</div></td></tr>`}</tbody></table></div></div>`;
+};
+
+/* ---------------- UNIDADES ---------------- */
+VIEWS.unidades = function(){
+  const f=state.filtros; let list=state.showInativos?state.unidades.slice():ativos(state.unidades);
+  if(f.franqueado) list=list.filter(u=>u.franqueadoId===f.franqueado);
+  if(f.regiao) list=list.filter(u=>u.estado===f.regiao);
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Unidades (vending machines)</h2><p>Cada máquina é uma unidade, vinculada a um franqueado, com royalty próprio.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="nova-unidade">+ Nova unidade</button>`:''}</div>
+  <div class="filters">
+    <div class="field"><label>Franqueado</label><select data-filtro="franqueado"><option value="">Todos</option>${ativos(state.franqueados).map(fr=>`<option value="${fr.id}" ${f.franqueado===fr.id?'selected':''}>${esc(fr.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Estado</label><select data-filtro="regiao"><option value="">Todos</option>${regioesDisponiveis().map(e=>`<option value="${e}" ${f.regiao===e?'selected':''}>${esc(e)}</option>`).join('')}</select></div>
+  </div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Código</th><th>Ponto / apelido</th><th>Franqueado</th><th>Praça</th><th class="num">Royalty</th><th class="num">Venc.</th><th class="num">Status</th><th></th></tr></thead>
+    <tbody>${list.length?list.slice().sort((a,b)=>(a.codigo||'').localeCompare(b.codigo||'')).map(u=>{ const fr=franqById(u.franqueadoId);
+      return `<tr class="${u.ativo===false?'inativo':''}"><td><b>${esc(u.codigo||'—')}</b></td><td>${esc(u.apelido||'—')}</td><td>${fr?esc(fr.nome):'<span class="cell-sub">sem vínculo</span>'}</td><td>${esc([u.cidade,u.estado].filter(Boolean).join(' / ')||'—')}</td><td class="num">${(u.royaltyPct??state.config.royaltyPct)}%<div class="cell-sub">mín ${brl(u.royaltyMinimo??state.config.royaltyMinimo)}</div></td><td class="num">dia ${u.diaVencimento??state.config.diaVencimento}</td><td class="num">${u.ativo===false?'<span class="tag off">Inativa</span>':(u.status==='implantacao'?'<span class="tag prev">Implantação</span>':'<span class="tag ok">Ativa</span>')}</td><td><div class="row-actions">${rowActions('unidade',u)}</div></td></tr>`;}).join('')
+      :`<tr><td colspan="8"><div class="empty"><div class="big">🏪</div>Nenhuma unidade cadastrada.</div></td></tr>`}</tbody></table></div></div>`;
+};
+
+/* ---------------- VENDAS ---------------- */
+VIEWS.vendas = function(){
+  const f=state.filtros; let list=ativos(state.vendas).slice();
+  if(f.franqueado) list=list.filter(v=>unidById(v.unidadeId)?.franqueadoId===f.franqueado);
+  if(f.regiao) list=list.filter(v=>unidById(v.unidadeId)?.estado===f.regiao);
+  if(f.compMes) list=list.filter(v=>monthKey(v.competencia)===f.compMes);
+  list.sort((a,b)=>(b.competencia||'').localeCompare(a.competencia||''));
+  const totV=list.reduce((s,v)=>s+(Number(v.valor)||0),0), totR=list.reduce((s,v)=>s+royaltyProjetado(v),0);
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Vendas das máquinas</h2><p>Base de cálculo dos royalties. Lançamento manual agora; a integração com o sistema das máquinas alimenta esta tela depois.</p></div><div class="spacer"></div>${state.canEdit?`<button class="btn" data-act="gerar-royalties">⚡ Gerar royalties da competência</button>`:''}${state.canEdit?`<button class="btn primary" data-act="nova-venda">+ Lançar venda</button>`:''}</div>
+  <div class="banner info">🔌 <b>Integração futura:</b> o sistema das máquinas grava as vendas aqui (origem = integração), por dia/semana/mês e região. O cálculo de royalty abaixo já roda sobre esses dados.</div>
+  <div class="filters">
+    <div class="field"><label>Competência</label><select data-filtro="compMes"><option value="">Todas</option>${mesesComMovimento().map(m=>`<option value="${m}" ${f.compMes===m?'selected':''}>${monthLabel(m)}</option>`).join('')}</select></div>
+    <div class="field"><label>Franqueado</label><select data-filtro="franqueado"><option value="">Todos</option>${ativos(state.franqueados).map(fr=>`<option value="${fr.id}" ${f.franqueado===fr.id?'selected':''}>${esc(fr.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Estado</label><select data-filtro="regiao"><option value="">Todos</option>${regioesDisponiveis().map(e=>`<option value="${e}" ${f.regiao===e?'selected':''}>${esc(e)}</option>`).join('')}</select></div>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:16px"><div class="kpi"><div class="lab">Vendas no recorte</div><div class="val">${brl(totV)}</div></div><div class="kpi"><div class="lab">Royalty projetado</div><div class="val" style="color:var(--blue)">${brl(totR)}</div></div></div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Competência</th><th>Unidade</th><th>Franqueado</th><th>Origem</th><th class="num">Venda</th><th class="num">Royalty proj.</th><th></th></tr></thead>
+    <tbody>${list.length?list.map(v=>{ const u=unidById(v.unidadeId); const fr=franqById(u?.franqueadoId);
+      return `<tr><td>${monthLabel(monthKey(v.competencia))}</td><td><b>${esc(u?.codigo||'—')}</b> <span class="cell-sub">${esc(u?.apelido||'')}</span></td><td>${esc(fr?.nome||'—')}</td><td>${v.origem==='integracao'?'<span class="tag roy">Integração</span>':'<span class="tag off">Manual</span>'}</td><td class="num">${brl(v.valor)}</td><td class="num">${brl(royaltyProjetado(v))}</td><td><div class="row-actions">${rowActions('venda',v)}</div></td></tr>`;}).join('')
+      :`<tr><td colspan="7"><div class="empty"><div class="big">🧾</div>Nenhuma venda lançada.</div></td></tr>`}</tbody></table></div></div>`;
+};
+
+/* ---------------- RECEITAS ---------------- */
+VIEWS.receitas = function(){
+  const f=state.filtros; let list=state.showInativos?state.receitas.slice():ativos(state.receitas);
+  if(f.compMes) list=list.filter(r=>r.competencia===f.compMes);
+  if(f.franqueado) list=list.filter(r=>(r.franqueadoId||unidById(r.unidadeId)?.franqueadoId)===f.franqueado);
+  if(f.status) list=list.filter(r=>r.status===f.status);
+  list.sort((a,b)=>(b.competencia||'').localeCompare(a.competencia||'')||tms(b.criadoEm)-tms(a.criadoEm));
+  const sum=a=>a.reduce((s,x)=>s+(Number(x.valor)||0),0);
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Receitas</h2><p>Royalties e taxas de franquia — as entradas do fluxo de caixa da franqueadora.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="nova-receita">+ Nova receita</button>`:''}</div>
+  <div class="filters">
+    <div class="field"><label>Competência</label><select data-filtro="compMes"><option value="">Todas</option>${mesesComMovimento().map(m=>`<option value="${m}" ${f.compMes===m?'selected':''}>${monthLabel(m)}</option>`).join('')}</select></div>
+    <div class="field"><label>Franqueado</label><select data-filtro="franqueado"><option value="">Todos</option>${ativos(state.franqueados).map(fr=>`<option value="${fr.id}" ${f.franqueado===fr.id?'selected':''}>${esc(fr.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Status</label><select data-filtro="status"><option value="">Todos</option><option value="previsto" ${f.status==='previsto'?'selected':''}>Previsto</option><option value="recebido" ${f.status==='recebido'?'selected':''}>Recebido</option></select></div>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:16px"><div class="kpi"><div class="lab">Recebido</div><div class="val" style="color:var(--green)">${brl(sum(list.filter(r=>r.status==='recebido')))}</div></div><div class="kpi"><div class="lab">A receber</div><div class="val" style="color:var(--amber)">${brl(sum(list.filter(r=>r.status!=='recebido')))}</div></div></div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Competência</th><th>Tipo</th><th>Referência</th><th class="num">Valor</th><th class="num">Vencimento</th><th>Status</th><th>Anexo</th><th></th></tr></thead>
+    <tbody>${list.length?list.map(r=>{ const u=unidById(r.unidadeId); const fr=franqById(r.franqueadoId||u?.franqueadoId);
+      return `<tr class="${r.ativo===false?'inativo':''}"><td>${monthLabel(r.competencia)}</td><td>${r.tipo==='taxa_franquia'?'<span class="tag taxa">Taxa franquia</span>':'<span class="tag roy">Royalty</span>'}</td><td>${esc(fr?.nome||'—')}${u?` <span class="cell-sub">· ${esc(u.codigo||'')}</span>`:''}${obsCell(r.observacao)}</td><td class="num"><b>${brl(r.valor)}</b></td><td class="num">${fmtDate(r.vencimento)}</td><td>${r.status==='recebido'?'<span class="tag ok">Recebido</span>':'<span class="tag prev">Previsto</span>'}</td><td>${anexoCell(r)}</td><td><div class="row-actions">${state.canEdit&&r.ativo!==false&&r.status!=='recebido'?`<button class="btn sm" data-act="receber" data-id="${r.id}">Receber</button>`:''}${rowActions('receita',r)}</div></td></tr>`;}).join('')
+      :`<tr><td colspan="8"><div class="empty"><div class="big">💰</div>Nenhuma receita no recorte.</div></td></tr>`}</tbody></table></div></div>`;
+};
+
+/* ---------------- DESPESAS ---------------- */
+VIEWS.despesas = function(){
+  const f=state.filtros; let list=state.showInativos?state.despesas.slice():ativos(state.despesas);
+  if(f.compMes) list=list.filter(d=>d.competencia===f.compMes);
+  if(f.status) list=list.filter(d=>d.status===f.status);
+  list.sort((a,b)=>(b.vencimento||'').localeCompare(a.vencimento||''));
+  const sum=a=>a.reduce((s,x)=>s+(Number(x.valor)||0),0);
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Despesas da franqueadora</h2><p>Contas a pagar e pagas da operação Pipó.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="nova-despesa">+ Nova despesa</button>`:''}</div>
+  <div class="filters">
+    <div class="field"><label>Competência</label><select data-filtro="compMes"><option value="">Todas</option>${mesesComMovimento().map(m=>`<option value="${m}" ${f.compMes===m?'selected':''}>${monthLabel(m)}</option>`).join('')}</select></div>
+    <div class="field"><label>Status</label><select data-filtro="status"><option value="">Todos</option><option value="aberto" ${f.status==='aberto'?'selected':''}>Em aberto</option><option value="pago" ${f.status==='pago'?'selected':''}>Pago</option></select></div>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:16px"><div class="kpi"><div class="lab">Pago</div><div class="val" style="color:var(--danger)">${brl(sum(list.filter(d=>d.status==='pago')))}</div></div><div class="kpi"><div class="lab">Em aberto</div><div class="val" style="color:var(--amber)">${brl(sum(list.filter(d=>d.status!=='pago')))}</div></div></div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Descrição</th><th>Categoria</th><th class="num">Valor</th><th class="num">Vencimento</th><th class="num">Pagamento</th><th>Status</th><th>Anexo</th><th></th></tr></thead>
+    <tbody>${list.length?list.map(d=>`<tr class="${d.ativo===false?'inativo':''}"><td><b>${esc(d.descricao||'—')}</b>${obsCell(d.observacao)}</td><td class="cell-sub">${esc(d.categoria||'—')}</td><td class="num">${brl(d.valor)}</td><td class="num">${fmtDate(d.vencimento)}</td><td class="num">${fmtDate(d.pagamento)}</td><td>${d.status==='pago'?'<span class="tag ok">Pago</span>':'<span class="tag prev">Aberto</span>'}</td><td>${anexoCell(d)}</td><td><div class="row-actions">${state.canEdit&&d.ativo!==false&&d.status!=='pago'?`<button class="btn sm" data-act="pagar" data-id="${d.id}">Pagar</button>`:''}${rowActions('despesa',d)}</div></td></tr>`).join('')
+      :`<tr><td colspan="8"><div class="empty"><div class="big">📉</div>Nenhuma despesa no recorte.</div></td></tr>`}</tbody></table></div></div>`;
+};
+
+/* ---------------- APORTES ---------------- */
+VIEWS.aportes = function(){
+  const f=state.filtros;
+  let list=state.showInativos?state.aportes.slice():ativos(state.aportes);
+  if(f.compMes) list=list.filter(a=>a.competencia===f.compMes);
+  if(f.socio) list=list.filter(a=>a.socio===f.socio);
+  list.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||tms(b.criadoEm)-tms(a.criadoEm));
+  const cap=capitalResumo();
+  // total por sócio (vida inteira, ativos)
+  const porSocio={};
+  ativos(state.aportes).forEach(a=>{ const s=a.socio||'—'; porSocio[s]=(porSocio[s]||0)+(Number(a.valor)||0); });
+  const socioRows=Object.entries(porSocio).sort((a,b)=>b[1]-a[1]);
+  const socios=[...new Set(ativos(state.aportes).map(a=>a.socio).filter(Boolean))].sort();
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Aportes dos sócios</h2><p>Capital injetado na franqueadora, controle do quanto já foi utilizado e sinal de necessidade de novo aporte.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="novo-aporte">+ Novo aporte</button>`:''}</div>
+
+  <div class="kpi-grid" style="margin-bottom:16px">
+    <div class="kpi"><div class="lab">Aportes acumulados</div><div class="val" style="color:#7a3ea8">${brl(cap.aportesTotal)}</div></div>
+    <div class="kpi"><div class="lab">Capital utilizado</div><div class="val" style="color:var(--amber)">${brl(cap.capitalUtilizado)}</div><div class="sub">${cap.pctUtil}% do aporte</div></div>
+    <div class="kpi"><div class="lab">Caixa atual</div><div class="val">${brl(cap.caixaAtual)}</div></div>
+    <div class="kpi"><div class="lab">${cap.necessidadeAporte>0?'Necessidade de aporte':'Caixa projetado'}</div><div class="val" style="color:${cap.necessidadeAporte>0?'var(--danger)':'var(--green)'}">${brl(cap.necessidadeAporte>0?cap.necessidadeAporte:cap.caixaProjetado)}</div></div>
+  </div>
+
+  ${cap.necessidadeAporte>0?`<div class="banner warn">⚠️ <b>Necessário novo aporte de ${brl(cap.necessidadeAporte)}</b> para zerar o caixa projetado (após previsto a receber ${brl(cap.previstoReceber)} e despesas em aberto ${brl(cap.emAberto)}).</div>`:''}
+
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:16px" >
+    <div class="panel"><div class="ph"><h3>Por sócio</h3></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Sócio</th><th class="num">Aportado</th></tr></thead>
+      <tbody>${socioRows.length?socioRows.map(([s,v])=>`<tr><td><b>${esc(s)}</b></td><td class="num">${brl(v)}</td></tr>`).join('')+`<tr><td><b>Total</b></td><td class="num"><b>${brl(cap.aportesTotal)}</b></td></tr>`:`<tr><td colspan="2" class="empty">Nenhum aporte.</td></tr>`}</tbody></table></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h3>Lançamentos</h3><div class="spacer"></div>
+        <select data-filtro="socio" style="width:auto"><option value="">Todos sócios</option>${socios.map(s=>`<option value="${esc(s)}" ${f.socio===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
+        <select data-filtro="compMes" style="width:auto"><option value="">Todas comp.</option>${mesesComMovimento().map(m=>`<option value="${m}" ${f.compMes===m?'selected':''}>${monthLabel(m)}</option>`).join('')}</select>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th class="num">Data</th><th>Sócio</th><th>Forma</th><th class="num">Valor</th><th>Finalidade / obs.</th><th>Anexo</th><th></th></tr></thead>
+        <tbody>${list.length?list.map(a=>`<tr class="${a.ativo===false?'inativo':''}"><td class="num">${fmtDate(a.data)}</td><td><b>${esc(a.socio||'—')}</b></td><td class="cell-sub">${esc(a.forma||'—')}</td><td class="num"><b>${brl(a.valor)}</b></td><td class="cell-sub">${esc(a.finalidade||'')}${a.finalidade&&a.observacao?' · ':''}${esc(a.observacao||'')||(a.finalidade?'':'—')}</td><td>${anexoCell(a)}</td><td><div class="row-actions">${rowActions('aporte',a)}</div></td></tr>`).join('')
+          :`<tr><td colspan="7"><div class="empty"><div class="big">🤝</div>Nenhum aporte lançado.</div></td></tr>`}</tbody>
+      </table></div>
+    </div>
+  </div>`;
+};
+
+/* ---------------- DOCUMENTOS ---------------- */
+VIEWS.documentos = function(){
+  const list=(state.showInativos?state.documentos.slice():ativos(state.documentos)).sort((a,b)=>tms(b.criadoEm)-tms(a.criadoEm));
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Documentos & contratos</h2><p>Arquivo digital dos contratos de franquia e demais documentos da rede.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="novo-documento">+ Novo documento</button>`:''}</div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Título</th><th>Tipo</th><th>Vínculo</th><th class="num">Data</th><th>Arquivo</th><th></th></tr></thead>
+    <tbody>${list.length?list.map(d=>{ const fr=franqById(d.franqueadoId); const u=unidById(d.unidadeId);
+      return `<tr class="${d.ativo===false?'inativo':''}"><td><b>${esc(d.titulo||'—')}</b></td><td class="cell-sub">${esc(d.tipo||'—')}</td><td>${esc(fr?.nome||'')}${u?` <span class="cell-sub">· ${esc(u.codigo||'')}</span>`:''}${!fr&&!u?'<span class="cell-sub">rede</span>':''}</td><td class="num">${fmtDate(d.data)}</td><td>${anexoCell(d)}</td><td><div class="row-actions">${rowActions('documento',d)}</div></td></tr>`;}).join('')
+      :`<tr><td colspan="6"><div class="empty"><div class="big">📁</div>Nenhum documento guardado.</div></td></tr>`}</tbody></table></div></div>`;
+};
+
+/* ---------------- REGISTROS ---------------- */
+VIEWS.registros = function(){
+  const list=state.log.slice().sort((a,b)=>tms(b.em)-tms(a.em)).slice(0,300);
+  return `<div class="page-head"><div><h2>Registros</h2><p>Histórico de quem fez cada lançamento. Nada é excluído — itens são apenas inativados.</p></div></div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Entidade</th><th>Resumo</th></tr></thead>
+    <tbody>${list.length?list.map(l=>`<tr><td class="cell-sub">${fmtDateTime(l.em)}</td><td>${esc(nomeUsuario(l.usuarioId))}</td><td>${badgeAcao(l.acao)}</td><td class="cell-sub">${esc(l.entidade||'')}</td><td>${esc(l.resumo||'')}</td></tr>`).join('')
+      :`<tr><td colspan="5"><div class="empty"><div class="big">🕑</div>Sem registros ainda.</div></td></tr>`}</tbody></table></div></div>`;
+};
+function nomeUsuario(id){ if(!id) return '—'; const u=state.usuarios.find(x=>x.userId===id); return u?(u.nome||u.email||'Usuário'):'Usuário'; }
+function badgeAcao(a){ const m={criar:'ok',editar:'roy',inativar:'off',receber:'ok',pagar:'off',reativar:'prev'};
+  const lbl={criar:'Criou',editar:'Editou',inativar:'Inativou',receber:'Recebeu',pagar:'Pagou',reativar:'Reativou'};
+  return `<span class="tag ${m[a]||'off'}">${lbl[a]||esc(a)}</span>`; }
+
+/* ---------------- USUÁRIOS ---------------- */
+VIEWS.usuarios = function(){
+  const list=state.usuarios.slice().sort((a,b)=>(a.email||'').localeCompare(b.email||''));
+  return `
+  <div class="page-head"><div><h2>Usuários & acesso</h2><p>Quem entra vira "Visualização" automaticamente; um gestor promove para "Gestão".</p></div></div>
+  ${state.isMaster?'':`<div class="banner info">👁️ Apenas o <b>master</b> altera papéis. Aqui você vê a equipe.</div>`}
+  <div class="banner info">➕ Para dar acesso a alguém: no painel do Supabase (Authentication → Users → Add user), crie o e-mail e senha da pessoa. Ela entra aqui e aparece como <b>Visualização</b>; o master define o papel abaixo.</div>
+  <div class="banner info">🔐 <b>Master</b>: dono, acesso total e define permissões. &nbsp;<b>Financeiro</b>: faz tudo (lança, edita, inativa). &nbsp;<b>Visualização</b>: só consulta.</div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th>Usuário</th><th>E-mail</th><th>Papel</th><th class="num">Status</th><th></th></tr></thead>
+    <tbody>${list.length?list.map(u=>`<tr class="${u.ativo===false?'inativo':''}"><td><b>${esc(u.nome||'—')}</b></td><td class="cell-sub">${esc(u.email||'—')}</td><td>${roleTag(u.perfil,u.isMaster)}</td><td class="num">${u.ativo===false?'<span class="tag off">Inativo</span>':'<span class="tag ok">Ativo</span>'}</td><td><div class="row-actions">${state.isMaster&&u.userId!==state.myId?`<select class="btn sm" data-act="set-perfil" data-id="${u.userId}" style="padding:5px 7px"><option value="master" ${(u.perfil==='gestao'&&u.isMaster)?'selected':''}>Master</option><option value="financeiro" ${(u.perfil==='gestao'&&!u.isMaster)?'selected':''}>Financeiro</option><option value="visualizacao" ${u.perfil!=='gestao'?'selected':''}>Visualização</option></select><button class="btn sm ghost" data-act="user-ativo" data-id="${u.userId}">${u.ativo===false?'Reativar':'Inativar'}</button>`:(u.userId===state.myId?'<span class="cell-sub">você</span>':'')}</div></td></tr>`).join('')
+      :`<tr><td colspan="5"><div class="empty"><div class="big">🔑</div>Nenhum usuário além de você ainda.</div></td></tr>`}</tbody></table></div></div>`;
+};
+
+/* ---------------- CONFIG ---------------- */
+VIEWS.config = function(){
+  const c=state.config;
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Configurações</h2><p>Padrões da rede Pipó.</p></div></div>
+  <div class="panel" style="max-width:560px"><div class="ph"><h3>Padrões financeiros da rede</h3></div>
+    <div class="mb" style="padding:18px 20px"><div class="form-grid">
+      <div class="field"><label>Royalty padrão (%)</label><input id="c-roy" type="number" step="0.1" value="${c.royaltyPct}" ${state.canEdit?'':'disabled'}></div>
+      <div class="field"><label>Royalty mínimo / mês (R$)</label><input id="c-min" type="number" step="1" value="${c.royaltyMinimo}" ${state.canEdit?'':'disabled'}></div>
+      <div class="field"><label>Dia de vencimento padrão</label><input id="c-dia" type="number" min="1" max="28" value="${c.diaVencimento}" ${state.canEdit?'':'disabled'}></div>
+      <div class="field"><label>Taxa de franquia padrão (R$)</label><input id="c-taxa" type="number" step="1" value="${c.taxaFranquia}" ${state.canEdit?'':'disabled'}></div>
+    </div>${state.canEdit?`<div style="margin-top:16px"><button class="btn primary" data-act="salvar-config">Salvar padrões</button></div>`:''}</div></div>`;
+};
+
+/* ---------- shared bits ---------- */
+function toggleInativosHTML(){ return `<label class="toggle"><input type="checkbox" data-act="toggle-inativos" ${state.showInativos?'checked':''}> mostrar inativos</label>`; }
+function rowActions(tipo,item){ if(!state.canEdit) return '';
+  if(item.ativo===false) return `<button class="btn sm ghost" data-act="reativar" data-tipo="${tipo}" data-id="${item.id}">Reativar</button>`;
+  return `<button class="btn sm ghost" data-act="editar" data-tipo="${tipo}" data-id="${item.id}">Editar</button><button class="btn sm ghost" data-act="inativar" data-tipo="${tipo}" data-id="${item.id}" title="Inativar (não exclui)">Inativar</button>`; }
+function anexoCell(item){ if(item.anexoPath) return `<button class="attach-pill" data-act="ver-anexo" data-path="${esc(item.anexoPath)}">📎 ${esc(item.anexoNome||'arquivo')}</button>`; return '<span class="cell-sub">—</span>'; }
+function obsCell(txt){ if(!txt) return ''; return ` <span title="${esc(txt)}" style="cursor:help">📝</span>`; }
+
+/* ---------- events ---------- */
+function wireView(){
+  $('#main').querySelectorAll('[data-filtro]').forEach(el=>el.addEventListener('change',()=>{ state.filtros[el.dataset.filtro]=el.value; renderCurrent(); }));
+  const comp=$('#f-comp'); if(comp) comp.addEventListener('change',e=>{ state.filtros.compMes=e.target.value; renderCurrent(); });
+}
+$('#nav').addEventListener('click',e=>{ const it=e.target.closest('.nav-item'); if(!it) return; state.view=it.dataset.view; renderNav(); renderCurrent(); });
+
+document.body.addEventListener('click', async e=>{
+  const b=e.target.closest('[data-act]'); if(!b) return;
+  const act=b.dataset.act, id=b.dataset.id, tipo=b.dataset.tipo;
+  switch(act){
+    case 'toggle-inativos': state.showInativos=b.checked; renderCurrent(); return;
+    case 'novo-franqueado': return formFranqueado();
+    case 'nova-unidade': return formUnidade();
+    case 'nova-venda': return formVenda();
+    case 'nova-receita': return formReceita();
+    case 'nova-despesa': return formDespesa();
+    case 'novo-aporte': return formAporte();
+    case 'novo-documento': return formDocumento();
+    case 'novo-lead': return formLead();
+    case 'abrir-lead': return abrirLead(id);
+    case 'salvar-config': return salvarConfig();
+    case 'gerar-royalties': return gerarRoyalties();
+    case 'editar': return editar(tipo,id);
+    case 'inativar': return setAtivo(tipo,id,false);
+    case 'reativar': return setAtivo(tipo,id,true);
+    case 'receber': return marcarReceber(id);
+    case 'pagar': return marcarPagar(id);
+    case 'ver-anexo': return verAnexo(b.dataset.path);
+    case 'user-ativo': return userAtivo(id);
+  }
+});
+document.body.addEventListener('change', e=>{
+  const s=e.target.closest('select[data-act="set-perfil"]'); if(!s) return;
+  setPerfil(s.dataset.id, s.value);
+});
+
+function collOf(t){ return ({franqueado:'franqueados',unidade:'unidades',venda:'vendas',receita:'receitas',despesa:'despesas',aporte:'aportes',documento:'documentos'})[t]; }
+function labelOf(t){ return ({franqueado:'Franqueado',unidade:'Unidade',venda:'Venda',receita:'Receita',despesa:'Despesa',aporte:'Aporte',documento:'Documento'})[t]; }
+
+async function setAtivo(tipo,id,ativo){
+  const coll=collOf(tipo); const item=state[coll].find(x=>x.id===id); if(!item) return;
+  if(!ativo && !confirm('Inativar este item? Ele não é excluído — apenas sai das listas ativas e fica no histórico.')) return;
+  const upd={...item, ativo, ...(ativo?{atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()}:{atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()})};
+  if(await save(coll,upd)){ await logAcao(ativo?'reativar':'inativar',labelOf(tipo),id,resumoItem(tipo,item)); toast(ativo?'Item reativado':'Item inativado'); await loadAll(); }
+}
+async function marcarReceber(id){ const r=state.receitas.find(x=>x.id===id); if(!r) return;
+  if(await save('receitas',{...r,status:'recebido',recebidoEm:todayISO(),atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()})){ await logAcao('receber','Receita',id,descReceita(r)+' — '+brl(r.valor)); toast('Receita recebida'); await loadAll(); } }
+async function marcarPagar(id){ const d=state.despesas.find(x=>x.id===id); if(!d) return;
+  if(await save('despesas',{...d,status:'pago',pagamento:todayISO(),atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()})){ await logAcao('pagar','Despesa',id,(d.descricao||'')+' — '+brl(d.valor)); toast('Despesa paga'); await loadAll(); } }
+function resumoItem(t,i){ if(t==='franqueado')return i.nome; if(t==='unidade')return (i.codigo||'')+' '+(i.apelido||'');
+  if(t==='venda'){const u=unidById(i.unidadeId);return (u?.codigo||'')+' '+monthLabel(monthKey(i.competencia))+' '+brl(i.valor);}
+  if(t==='receita')return descReceita(i)+' '+brl(i.valor); if(t==='despesa')return (i.descricao||'')+' '+brl(i.valor);
+  if(t==='aporte')return (i.socio||'')+' '+brl(i.valor); if(t==='documento')return i.titulo; return ''; }
+
+async function verAnexo(path){ const { data, error }=await sb.storage.from('pipo-anexos').createSignedUrl(path,120);
+  if(error){ toast('Não foi possível abrir o anexo',true); return; } window.open(data.signedUrl,'_blank'); }
+
+async function setPerfil(userId, papel){
+  const upd = papel==='master'     ? {perfil:'gestao', is_master:true}
+            : papel==='financeiro' ? {perfil:'gestao', is_master:false}
+            :                        {perfil:'visualizacao', is_master:false};
+  const { error }=await sb.from('pipo_usuarios').update(upd).eq('user_id',userId);
+  if(error){ toast('Erro: '+error.message,true); return; } toast('Papel atualizado'); await loadAll(); }
+async function userAtivo(userId){ const u=state.usuarios.find(x=>x.userId===userId); if(!u) return;
+  const { error }=await sb.from('pipo_usuarios').update({ativo:!(u.ativo!==false)? false:true}).eq('user_id',userId);
+  if(error){ toast('Erro: '+error.message,true); return; } toast('Status atualizado'); await loadAll(); }
+
+/* ---------- modal / forms ---------- */
+function openModal(title, bodyHTML, onSave, saveLabel){
+  const root=$('#modal-root');
+  root.innerHTML=`<div class="overlay"><div class="modal"><div class="mh"><h3>${esc(title)}</h3><button class="x" data-close>&times;</button></div><div class="mb">${bodyHTML}</div><div class="mf"><button class="btn" data-close>Cancelar</button><button class="btn primary" data-save>${esc(saveLabel||'Salvar')}</button></div></div></div>`;
+  const close=()=>root.innerHTML='';
+  root.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',close));
+  root.querySelector('.overlay').addEventListener('click',e=>{ if(e.target.classList.contains('overlay')) close(); });
+  root.querySelector('[data-save]').addEventListener('click', async ()=>{ const btn=root.querySelector('[data-save]'); btn.disabled=true; const ok=await onSave(); btn.disabled=false; if(ok!==false) close(); });
+}
+function val(id){ const el=document.getElementById(id); return el?el.value.trim():''; }
+function numval(id){ const v=parseFloat((document.getElementById(id)||{}).value); return isNaN(v)?0:v; }
+async function handleUpload(fileInputId, pasta){
+  const el=document.getElementById(fileInputId); if(!el||!el.files||!el.files[0]) return null;
+  const f=el.files[0]; const safe=f.name.replace(/[^\w.\-]/g,'_');
+  const path=`${pasta}/${uid()}_${safe}`;
+  toast('Enviando anexo…');
+  const { error }=await sb.storage.from('pipo-anexos').upload(path, f, { upsert:false });
+  if(error){ toast('Falha no anexo: '+error.message,true); return null; }
+  return { anexoPath:path, anexoNome:f.name };
+}
+function franqOptions(sel){ return `<option value="">— selecione —</option>`+ativos(state.franqueados).map(f=>`<option value="${f.id}" ${f.id===sel?'selected':''}>${esc(f.nome)}</option>`).join(''); }
+function unidOptions(sel){ return `<option value="">— selecione —</option>`+ativos(state.unidades).map(u=>{ const fr=franqById(u.franqueadoId); return `<option value="${u.id}" ${u.id===sel?'selected':''}>${esc(u.codigo||'')}${u.apelido?' · '+esc(u.apelido):''}${fr?' ('+esc(fr.nome)+')':''}</option>`;}).join(''); }
+const UF=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+function ufOptions(sel){ return `<option value="">—</option>`+UF.map(u=>`<option value="${u}" ${u===sel?'selected':''}>${u}</option>`).join(''); }
+
+function formFranqueado(item){ const i=item||{};
+  openModal(item?'Editar franqueado':'Novo franqueado',`<div class="form-grid">
+    <div class="field full"><label>Nome / razão social *</label><input id="fq-nome" value="${esc(i.nome||'')}"></div>
+    <div class="field"><label>CPF / CNPJ</label><input id="fq-doc" value="${esc(i.documento||'')}"></div>
+    <div class="field"><label>Contato</label><input id="fq-contato" value="${esc(i.contato||'')}"></div>
+    <div class="field"><label>Cidade</label><input id="fq-cidade" value="${esc(i.cidade||'')}"></div>
+    <div class="field"><label>Estado</label><select id="fq-uf">${ufOptions(i.estado)}</select></div></div>`,
+    async ()=>{ const nome=val('fq-nome'); if(!nome){ toast('Informe o nome',true); return false; }
+      const obj={ id:i.id||uid(), nome, documento:val('fq-doc'), contato:val('fq-contato'), cidade:val('fq-cidade'), estado:val('fq-uf'), ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      if(await save('franqueados',obj)){ await logAcao(item?'editar':'criar','Franqueado',obj.id,nome); toast('Franqueado salvo'); await loadAll(); } });
+}
+function formUnidade(item){ const i=item||{};
+  openModal(item?'Editar unidade':'Nova unidade',`<div class="form-grid">
+    <div class="field"><label>Código *</label><input id="un-cod" value="${esc(i.codigo||'')}" placeholder="PIPO-001"></div>
+    <div class="field"><label>Ponto / apelido</label><input id="un-apel" value="${esc(i.apelido||'')}"></div>
+    <div class="field full"><label>Franqueado *</label><select id="un-franq">${franqOptions(i.franqueadoId)}</select></div>
+    <div class="field"><label>Cidade</label><input id="un-cidade" value="${esc(i.cidade||'')}"></div>
+    <div class="field"><label>Estado</label><select id="un-uf">${ufOptions(i.estado)}</select></div>
+    <div class="field"><label>Royalty (%)</label><input id="un-roy" type="number" step="0.1" value="${i.royaltyPct??state.config.royaltyPct}"></div>
+    <div class="field"><label>Royalty mínimo (R$)</label><input id="un-min" type="number" step="1" value="${i.royaltyMinimo??state.config.royaltyMinimo}"></div>
+    <div class="field"><label>Dia de vencimento</label><input id="un-dia" type="number" min="1" max="28" value="${i.diaVencimento??state.config.diaVencimento}"></div>
+    <div class="field"><label>Situação</label><select id="un-status"><option value="ativa" ${i.status!=='implantacao'?'selected':''}>Ativa</option><option value="implantacao" ${i.status==='implantacao'?'selected':''}>Em implantação</option></select></div>
+    <div class="field"><label>Data de instalação</label><input id="un-data" type="date" value="${esc(i.dataInstalacao||'')}"></div>
+    <div class="field full"><label class="toggle"><input type="checkbox" id="un-taxa" ${item?'':'checked'}> gerar lançamento da taxa de franquia (${brl(state.config.taxaFranquia)})</label></div></div>`,
+    async ()=>{ const cod=val('un-cod'), franq=val('un-franq'); if(!cod){ toast('Informe o código',true); return false; } if(!franq){ toast('Selecione o franqueado',true); return false; }
+      const obj={ id:i.id||uid(), codigo:cod, apelido:val('un-apel'), franqueadoId:franq, cidade:val('un-cidade'), estado:val('un-uf'), royaltyPct:numval('un-roy'), royaltyMinimo:numval('un-min'), diaVencimento:numval('un-dia')||state.config.diaVencimento, status:val('un-status'), dataInstalacao:val('un-data')||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      if(await save('unidades',obj)){ await logAcao(item?'editar':'criar','Unidade',obj.id,cod);
+        const taxaEl=document.getElementById('un-taxa');
+        if(!item && taxaEl && taxaEl.checked){ const venc=obj.dataInstalacao||todayISO();
+          const rec={ id:uid(), tipo:'taxa_franquia', franqueadoId:franq, unidadeId:obj.id, competencia:monthKey(venc), valor:state.config.taxaFranquia, vencimento:venc, status:'previsto', origem:'manual', ativo:true, criadoPor:state.myId, criadoEm:new Date().toISOString() };
+          await save('receitas',rec); await logAcao('criar','Receita',rec.id,'Taxa de franquia '+cod+' '+brl(rec.valor)); }
+        toast('Unidade salva'); await loadAll(); } });
+}
+function formVenda(item){ const i=item||{};
+  openModal(item?'Editar venda':'Lançar venda',`<div class="form-grid">
+    <div class="field full"><label>Unidade *</label><select id="vd-unid">${unidOptions(i.unidadeId)}</select></div>
+    <div class="field"><label>Competência *</label><input id="vd-comp" type="month" value="${esc(i.competencia?monthKey(i.competencia):monthKey())}"></div>
+    <div class="field"><label>Valor vendido (R$) *</label><input id="vd-valor" type="number" step="0.01" value="${i.valor??''}"></div>
+    <div class="field full"><span class="hint">O royalty é calculado automaticamente sobre este valor conforme o % da unidade.</span></div></div>`,
+    async ()=>{ const unidade=val('vd-unid'); if(!unidade){ toast('Selecione a unidade',true); return false; } const valor=numval('vd-valor'); if(!valor){ toast('Informe o valor',true); return false; }
+      const obj={ id:i.id||uid(), unidadeId:unidade, competencia:val('vd-comp')||monthKey(), valor, origem:i.origem||'manual', ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      if(await save('vendas',obj)){ await logAcao(item?'editar':'criar','Venda',obj.id,resumoItem('venda',obj)); toast('Venda lançada'); await loadAll(); } });
+}
+function formReceita(item){ const i=item||{}; const tipo=i.tipo||'royalty';
+  openModal(item?'Editar receita':'Nova receita',`<div class="form-grid">
+    <div class="field"><label>Tipo *</label><select id="rc-tipo"><option value="royalty" ${tipo==='royalty'?'selected':''}>Royalty</option><option value="taxa_franquia" ${tipo==='taxa_franquia'?'selected':''}>Taxa de franquia</option></select></div>
+    <div class="field"><label>Competência *</label><input id="rc-comp" type="month" value="${esc(i.competencia||monthKey())}"></div>
+    <div class="field full"><label>Franqueado</label><select id="rc-franq">${franqOptions(i.franqueadoId)}</select></div>
+    <div class="field full"><label>Unidade (opcional)</label><select id="rc-unid">${unidOptions(i.unidadeId)}</select></div>
+    <div class="field"><label>Valor (R$) *</label><input id="rc-valor" type="number" step="0.01" value="${i.valor??''}"></div>
+    <div class="field"><label>Vencimento</label><input id="rc-venc" type="date" value="${esc(i.vencimento||todayISO())}"></div>
+    <div class="field"><label>Status</label><select id="rc-status"><option value="previsto" ${i.status!=='recebido'?'selected':''}>Previsto</option><option value="recebido" ${i.status==='recebido'?'selected':''}>Recebido</option></select></div>
+    <div class="field full"><label>Observação / classificação</label><input id="rc-obs" value="${esc(i.observacao||'')}" placeholder="ex.: royalty mínimo, referência do acordo, origem..."></div>
+    <div class="field"><label>Comprovante (opcional)</label><input id="rc-file" type="file"></div></div>`,
+    async ()=>{ const valor=numval('rc-valor'); if(!valor){ toast('Informe o valor',true); return false; }
+      const anexo=await handleUpload('rc-file','receitas');
+      const obj={ id:i.id||uid(), tipo:val('rc-tipo'), franqueadoId:val('rc-franq')||null, unidadeId:val('rc-unid')||null, competencia:val('rc-comp')||monthKey(), valor, vencimento:val('rc-venc')||null, status:val('rc-status'), origem:i.origem||'manual', observacao:val('rc-obs')||null, anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      if(await save('receitas',obj)){ await logAcao(item?'editar':'criar','Receita',obj.id,resumoItem('receita',obj)); toast('Receita salva'); await loadAll(); } });
+}
+function formDespesa(item){ const i=item||{}; const cats=['Marketing','Comissões','Jurídico','Sistemas/Software','Logística','Administrativo','Impostos','Outros'];
+  openModal(item?'Editar despesa':'Nova despesa',`<div class="form-grid">
+    <div class="field full"><label>Descrição *</label><input id="dp-desc" value="${esc(i.descricao||'')}"></div>
+    <div class="field"><label>Categoria</label><select id="dp-cat">${cats.map(c=>`<option ${i.categoria===c?'selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="field"><label>Valor (R$) *</label><input id="dp-valor" type="number" step="0.01" value="${i.valor??''}"></div>
+    <div class="field"><label>Competência</label><input id="dp-comp" type="month" value="${esc(i.competencia||monthKey())}"></div>
+    <div class="field"><label>Vencimento</label><input id="dp-venc" type="date" value="${esc(i.vencimento||todayISO())}"></div>
+    <div class="field"><label>Status</label><select id="dp-status"><option value="aberto" ${i.status!=='pago'?'selected':''}>Em aberto</option><option value="pago" ${i.status==='pago'?'selected':''}>Pago</option></select></div>
+    <div class="field"><label>Data de pagamento</label><input id="dp-pag" type="date" value="${esc(i.pagamento||'')}"></div>
+    <div class="field full"><label>Observação</label><input id="dp-obs" value="${esc(i.observacao||'')}" placeholder="ex.: para que serviu, fornecedor, referência..."></div>
+    <div class="field full"><label>Anexo (nota/comprovante)</label><input id="dp-file" type="file"></div></div>`,
+    async ()=>{ const desc=val('dp-desc'); if(!desc){ toast('Informe a descrição',true); return false; } const valor=numval('dp-valor'); if(!valor){ toast('Informe o valor',true); return false; }
+      const anexo=await handleUpload('dp-file','despesas');
+      const obj={ id:i.id||uid(), descricao:desc, categoria:val('dp-cat'), valor, competencia:val('dp-comp')||monthKey(val('dp-venc')||todayISO()), vencimento:val('dp-venc')||null, status:val('dp-status'), pagamento:val('dp-pag')||null, observacao:val('dp-obs')||null, anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      if(await save('despesas',obj)){ await logAcao(item?'editar':'criar','Despesa',obj.id,resumoItem('despesa',obj)); toast('Despesa salva'); await loadAll(); } });
+}
+function formAporte(item){ const i=item||{};
+  const formas=['PIX','Transferência','Dinheiro','Cheque','Outro'];
+  const sociosExist=[...new Set(ativos(state.aportes).map(a=>a.socio).filter(Boolean))];
+  openModal(item?'Editar aporte':'Novo aporte', `<div class="form-grid">
+    <div class="field full"><label>Sócio *</label><input id="ap-socio" list="ap-socios" value="${esc(i.socio||'')}" placeholder="nome do sócio"><datalist id="ap-socios">${sociosExist.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
+    <div class="field"><label>Valor (R$) *</label><input id="ap-valor" type="number" step="0.01" value="${i.valor??''}"></div>
+    <div class="field"><label>Data</label><input id="ap-data" type="date" value="${esc(i.data||todayISO())}"></div>
+    <div class="field"><label>Competência</label><input id="ap-comp" type="month" value="${esc(i.competencia||monthKey(i.data||todayISO()))}"></div>
+    <div class="field"><label>Forma</label><select id="ap-forma">${formas.map(ff=>`<option ${i.forma===ff?'selected':''}>${ff}</option>`).join('')}</select></div>
+    <div class="field full"><label>Para que serviu (finalidade)</label><input id="ap-fin" value="${esc(i.finalidade||'')}" placeholder="ex.: capital de giro, compra de máquina, marketing..."></div>
+    <div class="field full"><label>Observação</label><input id="ap-obs" value="${esc(i.observacao||'')}"></div>
+    <div class="field full"><label>Comprovante (opcional)</label><input id="ap-file" type="file"></div></div>`,
+    async ()=>{ const socio=val('ap-socio'); if(!socio){ toast('Informe o sócio',true); return false; } const valor=numval('ap-valor'); if(!valor){ toast('Informe o valor',true); return false; }
+      const anexo=await handleUpload('ap-file','aportes');
+      const obj={ id:i.id||uid(), socio, valor, data:val('ap-data')||null, competencia:val('ap-comp')||monthKey(val('ap-data')||todayISO()), forma:val('ap-forma'), finalidade:val('ap-fin')||null, observacao:val('ap-obs'), anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      if(await save('aportes',obj)){ await logAcao(item?'editar':'criar','Aporte',obj.id,socio+' '+brl(valor)); toast('Aporte salvo'); await loadAll(); } });
+}
+function formDocumento(item){ const i=item||{}; const tipos=['Contrato de franquia','COF','Aditivo','Procuração','Comprovante','Outro'];
+  openModal(item?'Editar documento':'Novo documento',`<div class="form-grid">
+    <div class="field full"><label>Título *</label><input id="dc-tit" value="${esc(i.titulo||'')}"></div>
+    <div class="field"><label>Tipo</label><select id="dc-tipo">${tipos.map(t=>`<option ${i.tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Data</label><input id="dc-data" type="date" value="${esc(i.data||todayISO())}"></div>
+    <div class="field"><label>Franqueado (opcional)</label><select id="dc-franq">${franqOptions(i.franqueadoId)}</select></div>
+    <div class="field"><label>Unidade (opcional)</label><select id="dc-unid">${unidOptions(i.unidadeId)}</select></div>
+    <div class="field full"><label>Arquivo ${item&&i.anexoPath?'(enviar substitui o atual)':''}</label><input id="dc-file" type="file"></div></div>`,
+    async ()=>{ const tit=val('dc-tit'); if(!tit){ toast('Informe o título',true); return false; }
+      const anexo=await handleUpload('dc-file','documentos');
+      const obj={ id:i.id||uid(), titulo:tit, tipo:val('dc-tipo'), data:val('dc-data')||null, franqueadoId:val('dc-franq')||null, unidadeId:val('dc-unid')||null, anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      if(await save('documentos',obj)){ await logAcao(item?'editar':'criar','Documento',obj.id,tit); toast('Documento salvo'); await loadAll(); } });
+}
+function editar(tipo,id){ const coll=collOf(tipo); const item=state[coll].find(x=>x.id===id); if(!item) return;
+  ({franqueado:formFranqueado,unidade:formUnidade,venda:formVenda,receita:formReceita,despesa:formDespesa,aporte:formAporte,documento:formDocumento}[tipo])(item); }
+
+async function salvarConfig(){ const cfg={ id:'geral', royaltyPct:numval('c-roy'), royaltyMinimo:numval('c-min'), diaVencimento:numval('c-dia'), taxaFranquia:numval('c-taxa'), atualizadoEm:new Date().toISOString() };
+  const { error }=await sb.from('pipo_config').upsert(toRow(cfg)); if(error){ toast('Erro: '+error.message,true); return; } toast('Padrões salvos'); await loadAll(); }
+
+async function gerarRoyalties(){ const mk=state.filtros.compMes||monthKey();
+  const vendas=ativos(state.vendas).filter(v=>monthKey(v.competencia)===mk);
+  if(!vendas.length){ toast('Sem vendas na competência '+monthLabel(mk),true); return; }
+  let criadas=0, puladas=0;
+  for(const v of vendas){ const u=unidById(v.unidadeId); if(!u) continue;
+    const jaTem=ativos(state.receitas).some(r=>r.tipo==='royalty'&&r.unidadeId===v.unidadeId&&r.competencia===mk);
+    if(jaTem){ puladas++; continue; }
+    const dia=String(u.diaVencimento||state.config.diaVencimento).padStart(2,'0');
+    const rec={ id:uid(), tipo:'royalty', franqueadoId:u.franqueadoId, unidadeId:v.unidadeId, competencia:mk, valor:royaltyProjetado(v), vencimento:mk+'-'+dia, status:'previsto', origem:'projecao', ativo:true, criadoPor:state.myId, criadoEm:new Date().toISOString() };
+    if(await save('receitas',rec)){ criadas++; await logAcao('criar','Receita',rec.id,'Royalty '+monthLabel(mk)+' '+(u.codigo||'')+' '+brl(rec.valor)); } }
+  state.view='receitas'; state.filtros.compMes=mk; await loadAll();
+  toast(`${criadas} royalty(ies) gerado(s)`+(puladas?`, ${puladas} já existia(m)`:'')); }
+
+/* ================= CRM / LEADS ================= */
+const ETAPAS = [
+  {k:'novo', label:'Novo', cls:'prev'},
+  {k:'contatado', label:'Contatado', cls:'roy'},
+  {k:'qualificando', label:'Qualificando', cls:'roy'},
+  {k:'qualificado', label:'Qualificado', cls:'ok'},
+  {k:'reuniao_agendada', label:'Reunião agendada', cls:'taxa'},
+  {k:'ganho', label:'Ganho', cls:'ok'},
+  {k:'perdido', label:'Perdido', cls:'off'}
+];
+function etapaLabel(k){ const e=ETAPAS.find(x=>x.k===k); return e?e.label:k; }
+function canalLabel(c){ return ({landing:'Landing',whatsapp:'WhatsApp',indicacao:'Indicação',manual:'Manual',sistema:'Sistema',bot:'Bot',lead:'Lead'})[c]||c||'—'; }
+
+/* Base de conhecimento + roteiro do bot (resumo do BP, sem detalhes sensíveis) */
+const BOT = {
+  saudacao:(nome)=>`Oi${nome?' '+String(nome).split(' ')[0]:''}! 🍿 Aqui é da PIPÓ, franquia de pipoca gourmet por máquina automática. Posso te explicar como funciona e ver se faz sentido pra você?`,
+  pitch:[
+    "A PIPÓ é uma franquia de pipoca gourmet operada por máquinas automáticas (vending machines) adesivadas com a marca.",
+    "A máquina fica em pontos de alto fluxo (shopping, academia, faculdade, clínica, mercado) e vende 24h — sem funcionário e sem ponto comercial próprio.",
+    "Investimento total de R$ 50 mil (máquina, adesivagem, estoque inicial e taxa de franquia), com margem bruta de ~60% por saco.",
+    "Royalties de 8% do faturamento (mínimo R$ 1.200/mês), já com treinamento, suporte e abastecimento da rede.",
+    "Em pontos bons o retorno costuma vir rápido (payback de poucos meses) — depende do fluxo do ponto."
+  ],
+  perguntas:[
+    {campo:'nome', q:"Pra começar, como é o seu nome?"},
+    {campo:'cidade', q:"De qual cidade/estado você fala?"},
+    {campo:'capital_ok', q:"Você tem (ou consegue) o investimento inicial de R$ 50 mil para começar?"},
+    {campo:'perfil', q:"Você pensa em operar você mesmo ou em algo mais como investidor (deixar a máquina rodando)?"},
+    {campo:'ponto_ok', q:"Você já tem algum ponto em mente (shopping, academia, etc.) ou quer ajuda para encontrar?"},
+    {campo:'prazo', q:"Em quanto tempo você gostaria de começar?"},
+    {campo:'qtd_maquinas', q:"Está pensando em começar com quantas máquinas?"}
+  ],
+  fechamento:"Perfeito! O próximo passo é uma conversa rápida com nosso time para desenhar o seu cenário. Qual o melhor dia e horário para você?"
+};
+function leadCampoPreenchido(l,campo){
+  const map={nome:'nome',cidade:'cidade',capital_ok:'capitalOk',perfil:'perfil',ponto_ok:'pontoOk',prazo:'prazo',qtd_maquinas:'qtdMaquinas'};
+  const v=l[map[campo]||campo];
+  return !(v===undefined||v===null||v===''||v===0);
+}
+function proximaPergunta(l){ for(const p of BOT.perguntas){ if(!leadCampoPreenchido(l,p.campo)) return p; } return null; }
+function faltaLabel(c){ return ({capital_ok:'capital',ponto_ok:'ponto',qtd_maquinas:'nº máquinas'})[c]||c; }
+
+VIEWS.leads = function(){
+  const leads=ativos(state.leads);
+  const porEtapa=k=>leads.filter(l=>l.etapa===k);
+  const emConversa=leads.filter(l=>['contatado','qualificando','qualificado'].includes(l.etapa)).length;
+  const kpi=(v,l)=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Leads / Funil</h2><p>Leads da landing e do WhatsApp da Pipó. Cada resposta do lead vira dado no cadastro — leve até o agendamento da reunião.</p></div><div class="spacer"></div>${state.canEdit?`<button class="btn primary" data-act="novo-lead">+ Novo lead</button>`:''}</div>
+  <div class="kpis">${kpi(leads.length,'Leads ativos')}${kpi(emConversa,'Em conversa')}${kpi(porEtapa('reuniao_agendada').length,'Reuniões agendadas')}${kpi(porEtapa('ganho').length,'Ganhos')}</div>
+  <div class="funnel">${ETAPAS.map(e=>{
+    const col=leads.filter(l=>l.etapa===e.k).sort((a,b)=>tms(b.criadoEm)-tms(a.criadoEm));
+    return `<div class="fcol"><div class="fcol-h"><span class="tag ${e.cls}">${e.label}</span><span class="fcount">${col.length}</span></div>
+      <div class="fcol-b">${col.map(leadCard).join('')||'<div class="fempty">—</div>'}</div></div>`;
+  }).join('')}</div>`;
+};
+function leadCard(l){
+  const prox=proximaPergunta(l); const ativoFunil=!['ganho','perdido'].includes(l.etapa);
+  return `<div class="lcard" data-act="abrir-lead" data-id="${l.id}">
+    <div class="lcard-nome">${esc(l.nome||'(sem nome)')}</div>
+    <div class="lcard-sub">${esc([l.cidade,l.estado].filter(Boolean).join('/')||'—')} · ${esc(canalLabel(l.origem))}${l.telefone?' · '+esc(l.telefone):''}</div>
+    ${l.reuniaoEm?`<div class="lcard-reu">📅 ${fmtDateTime(l.reuniaoEm)}</div>`:''}
+    ${prox&&ativoFunil?`<div class="lcard-next">Falta perguntar: ${esc(faltaLabel(prox.campo))}</div>`:''}
+  </div>`;
+}
+function triOpt(v){ return `<option value="">—</option><option value="sim" ${v===true?'selected':''}>Sim</option><option value="nao" ${v===false?'selected':''}>Não</option>`; }
+function triVal(id){ const v=val(id); return v==='sim'?true:(v==='nao'?false:null); }
+function renderModal(title, bodyHTML, footerHTML){
+  const root=$('#modal-root');
+  root.innerHTML=`<div class="overlay"><div class="modal"><div class="mh"><h3>${esc(title)}</h3><button class="x" data-close>&times;</button></div><div class="mb">${bodyHTML}</div><div class="mf">${footerHTML||'<button class="btn" data-close>Fechar</button>'}</div></div></div>`;
+  const close=()=>root.innerHTML='';
+  root.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',close));
+  root.querySelector('.overlay').addEventListener('click',e=>{ if(e.target.classList.contains('overlay')) close(); });
+  return close;
+}
+function abrirLead(id){
+  const l=state.leads.find(x=>x.id===id); if(!l) return;
+  const msgs=state.leadMensagens.filter(m=>m.leadId===id && m.ativo!==false).sort((a,b)=>tms(a.em)-tms(b.em));
+  const prox=proximaPergunta(l); const ed=state.canEdit;
+  const chat=msgs.length?msgs.map(m=>`<div class="msg ${m.direcao==='out'?'out':'in'}">${esc(m.texto||'')}<span class="meta">${m.direcao==='out'?'nós':'lead'} · ${esc(canalLabel(m.canal))} · ${fmtDateTime(m.em)}</span></div>`).join(''):'<div class="fempty">Sem mensagens ainda.</div>';
+  const dis=ed?'':'disabled';
+  const body=`<div class="form-grid">
+    <div class="field"><label>Nome</label><input id="ld-nome" value="${esc(l.nome||'')}" ${dis}></div>
+    <div class="field"><label>Telefone / WhatsApp</label><input id="ld-tel" value="${esc(l.telefone||'')}" ${dis}></div>
+    <div class="field"><label>E-mail</label><input id="ld-email" value="${esc(l.email||'')}" ${dis}></div>
+    <div class="field"><label>Cidade</label><input id="ld-cidade" value="${esc(l.cidade||'')}" ${dis}></div>
+    <div class="field"><label>Estado</label><select id="ld-uf" ${dis}>${ufOptions(l.estado)}</select></div>
+    <div class="field"><label>Origem</label><input value="${esc(canalLabel(l.origem))}" disabled></div>
+    <div class="field"><label>Tem capital (R$ 50k)?</label><select id="ld-cap" ${dis}>${triOpt(l.capitalOk)}</select></div>
+    <div class="field"><label>Perfil</label><select id="ld-perfil" ${dis}><option value="">—</option><option ${l.perfil==='investidor'?'selected':''}>investidor</option><option ${l.perfil==='operador'?'selected':''}>operador</option><option ${l.perfil==='ambos'?'selected':''}>ambos</option></select></div>
+    <div class="field"><label>Já tem ponto?</label><select id="ld-ponto" ${dis}>${triOpt(l.pontoOk)}</select></div>
+    <div class="field"><label>Prazo p/ começar</label><input id="ld-prazo" value="${esc(l.prazo||'')}" ${dis}></div>
+    <div class="field"><label>Qtd. máquinas</label><input id="ld-qtd" type="number" min="0" value="${l.qtdMaquinas??''}" ${dis}></div>
+    <div class="field"><label>Região de interesse</label><input id="ld-regiao" value="${esc(l.regiaoInteresse||'')}" ${dis}></div>
+    <div class="field full"><label>Observação</label><input id="ld-obs" value="${esc(l.observacao||'')}" ${dis}></div>
+  </div>
+  ${prox&&ed?`<div class="botbox" style="margin-top:10px">💬 <b>Sugestão do bot — próxima pergunta:</b><br>"${esc(prox.q)}"</div>`:''}
+  <h4 style="margin:14px 0 6px">Conversa</h4><div class="chat">${chat}</div>
+  ${ed?`<div class="form-grid" style="margin-top:10px">
+    <div class="field"><label>Direção</label><select id="ld-dir"><option value="out">Nós → lead</option><option value="in">Lead → nós</option></select></div>
+    <div class="field"><label>Canal</label><select id="ld-canal"><option value="whatsapp">WhatsApp</option><option value="manual">Manual / ligação</option></select></div>
+    <div class="field full"><label>Mensagem</label><textarea id="ld-msg" rows="2" placeholder="registrar mensagem enviada/recebida..."></textarea></div>
+    <div class="field full"><button class="btn" data-ld="add-msg">+ Registrar mensagem</button></div>
+  </div>`:''}`;
+  const footer=ed?`<div style="margin-right:auto"><select class="btn sm" data-ld="etapa">${ETAPAS.map(e=>`<option value="${e.k}" ${l.etapa===e.k?'selected':''}>${e.label}</option>`).join('')}</select></div>
+    <button class="btn" data-ld="agendar">📅 Agendar reunião</button>
+    <button class="btn" data-close>Fechar</button>
+    <button class="btn primary" data-ld="salvar">Salvar ficha</button>`:'<button class="btn" data-close>Fechar</button>';
+  renderModal('Lead — '+(l.nome||'(sem nome)'), body, footer);
+  const root=$('#modal-root');
+  root.querySelectorAll('[data-ld]').forEach(btn=>{
+    const a=btn.dataset.ld;
+    if(a==='etapa'){ btn.addEventListener('change',()=>mudarEtapa(id,btn.value)); return; }
+    btn.addEventListener('click', async ()=>{ if(a==='salvar') return salvarLead(id); if(a==='add-msg') return addMensagem(id); if(a==='agendar') return agendarReuniao(id); });
+  });
+}
+async function salvarLead(id){
+  const l=state.leads.find(x=>x.id===id); if(!l) return;
+  const obj={...l, nome:val('ld-nome'), telefone:val('ld-tel'), email:val('ld-email'), cidade:val('ld-cidade'), estado:val('ld-uf'),
+    capitalOk:triVal('ld-cap'), perfil:val('ld-perfil')||null, pontoOk:triVal('ld-ponto'), prazo:val('ld-prazo')||null,
+    qtdMaquinas:numval('ld-qtd')||null, regiaoInteresse:val('ld-regiao')||null, observacao:val('ld-obs')||null,
+    atualizadoPor:state.myId, atualizadoEm:new Date().toISOString()};
+  if(await save('leads',obj)){ await logAcao('editar','Lead',id,obj.nome||''); toast('Ficha salva'); await loadAll(); abrirLead(id); }
+}
+async function addMensagem(id){
+  const texto=val('ld-msg'); if(!texto){ toast('Escreva a mensagem',true); return; }
+  const m={ id:uid(), leadId:id, direcao:val('ld-dir')||'out', canal:val('ld-canal')||'whatsapp', texto, em:new Date().toISOString(), autor:state.myId, ativo:true, criadoPor:state.myId, criadoEm:new Date().toISOString() };
+  if(await save('lead_mensagens',m)){
+    const l=state.leads.find(x=>x.id===id);
+    if(l && l.etapa==='novo') await save('leads',{...l,etapa:'contatado',atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()});
+    await logAcao('criar','Mensagem',id,texto.slice(0,40)); toast('Mensagem registrada'); await loadAll(); abrirLead(id);
+  }
+}
+async function mudarEtapa(id, etapa){
+  const l=state.leads.find(x=>x.id===id); if(!l) return;
+  if(await save('leads',{...l,etapa,atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()})){ await logAcao('editar','Lead',id,'etapa → '+etapaLabel(etapa)); toast('Etapa: '+etapaLabel(etapa)); await loadAll(); abrirLead(id); }
+}
+function gcalLink(title, iso, durMin, details){
+  const dt=new Date(iso); const end=new Date(dt.getTime()+(durMin||30)*60000);
+  const fmt=d=>d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text='+encodeURIComponent(title)+'&dates='+fmt(dt)+'/'+fmt(end)+'&details='+encodeURIComponent(details||'');
+}
+function agendarReuniao(id){
+  const l=state.leads.find(x=>x.id===id); if(!l) return;
+  openModal('Agendar reunião', `<div class="form-grid">
+    <div class="field"><label>Data e hora *</label><input id="rz-dt" type="datetime-local"></div>
+    <div class="field"><label>Duração (min)</label><input id="rz-dur" type="number" value="30"></div>
+    <div class="field full"><label>Link (Meet/Zoom) — opcional</label><input id="rz-link" placeholder="cole o link da reunião, se já tiver"></div>
+    <div class="field full"><span class="hint">Ao salvar, o lead vai para "Reunião agendada" e abrimos um link para adicionar no Google Agenda.</span></div></div>`,
+    async ()=>{ const dtv=val('rz-dt'); if(!dtv){ toast('Informe data e hora',true); return false; }
+      const iso=new Date(dtv).toISOString(); const dur=numval('rz-dur')||30;
+      const gcal=gcalLink('Reunião PIPÓ — '+(l.nome||'lead'), iso, dur, 'Apresentação da franquia PIPÓ. Lead: '+(l.nome||'')+' '+(l.telefone||''));
+      const obj={...l, etapa:'reuniao_agendada', reuniaoEm:iso, reuniaoLink:val('rz-link')||gcal, atualizadoPor:state.myId, atualizadoEm:new Date().toISOString()};
+      if(await save('leads',obj)){ await logAcao('editar','Lead',id,'reunião '+fmtDateTime(iso)); toast('Reunião agendada'); window.open(gcal,'_blank'); await loadAll(); abrirLead(id); } });
+}
+function formLead(item){ const i=item||{};
+  openModal(item?'Editar lead':'Novo lead', `<div class="form-grid">
+    <div class="field full"><label>Nome</label><input id="nl-nome" value="${esc(i.nome||'')}"></div>
+    <div class="field"><label>Telefone / WhatsApp</label><input id="nl-tel" value="${esc(i.telefone||'')}" placeholder="(11) 90000-0000"></div>
+    <div class="field"><label>E-mail</label><input id="nl-email" value="${esc(i.email||'')}"></div>
+    <div class="field"><label>Cidade</label><input id="nl-cidade" value="${esc(i.cidade||'')}"></div>
+    <div class="field"><label>Estado</label><select id="nl-uf">${ufOptions(i.estado)}</select></div>
+    <div class="field full"><label>Como conheceu / origem</label><input id="nl-como" value="${esc(i.comoConheceu||'')}" placeholder="indicação, Instagram, Google..."></div>
+  </div>`,
+  async ()=>{ const nome=val('nl-nome'), tel=val('nl-tel'); if(!nome && !tel){ toast('Informe ao menos nome ou telefone',true); return false; }
+    const obj={ id:i.id||uid(), nome, telefone:tel, email:val('nl-email'), cidade:val('nl-cidade'), estado:val('nl-uf'), comoConheceu:val('nl-como')||null, origem:i.origem||'manual', etapa:i.etapa||'novo', ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+    if(await save('leads',obj)){ await logAcao(item?'editar':'criar','Lead',obj.id,nome||tel); toast('Lead salvo'); await loadAll(); } });
+}
+
+/* ---------- boot ---------- */
+boot();
+</script>
+</body>
+</html>
