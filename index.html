@@ -980,7 +980,8 @@ function resumoItem(t,i){ if(t==='franqueado')return i.nome; if(t==='unidade')re
   if(t==='receita')return descReceita(i)+' '+brl(i.valor); if(t==='despesa')return (i.descricao||'')+' '+brl(i.valor);
   if(t==='aporte')return (i.socio||'')+' '+brl(i.valor); if(t==='documento')return i.titulo; return ''; }
 
-async function verAnexo(path){ const { data, error }=await sb.storage.from('pipo-anexos').createSignedUrl(path,120);
+async function verAnexo(path){ if(/^https?:\/\//.test(path)){ window.open(path,'_blank'); return; }
+  const { data, error }=await sb.storage.from('pipo-anexos').createSignedUrl(path,120);
   if(error){ toast('Não foi possível abrir o anexo',true); return; } window.open(data.signedUrl,'_blank'); }
 
 async function setPerfil(userId, papel){
