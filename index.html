@@ -213,7 +213,8 @@
   <div class="shell">
     <nav class="side" id="nav">
       <div class="nav-sep">Operação</div>
-      <div class="nav-item active" data-view="painel"><span class="ico">📊</span> Painel / Fluxo</div>
+      <div class="nav-item active" data-view="fluxo"><span class="ico">💵</span> Fluxo de Caixa</div>
+      <div class="nav-item" data-view="painel"><span class="ico">📊</span> Painel / Resumo</div>
       <div class="nav-item" data-view="dashboard"><span class="ico">📈</span> Dashboard</div>
       <div class="nav-item" data-view="franqueados"><span class="ico">👥</span> Franqueados</div>
       <div class="nav-item" data-view="unidades"><span class="ico">🏪</span> Unidades</div>
@@ -250,7 +251,7 @@ const state = {
   leads:[], leadMensagens:[], socios:[],
   config:{ royaltyPct:8, royaltyMinimo:1200, diaVencimento:10, taxaFranquia:25000 },
   me:null, myId:null, myEmail:null, perfil:'visualizacao', canEdit:false, isMaster:false,
-  view:"painel", filtros:{ compMes:"", regiao:"", franqueado:"", status:"" }, showInativos:false
+  view:"fluxo", filtros:{ compMes:"", regiao:"", franqueado:"", status:"" }, showInativos:false
 };
 
 /* ---------- helpers ---------- */
@@ -371,7 +372,7 @@ function capitalResumo(){
   const sum=a=>a.reduce((s,x)=>s+(Number(x.valor)||0),0);
   const aportesTotal   = sum(ativos(state.aportes));
   const recebidoLife   = sum(ativos(state.receitas).filter(r=>r.status==='recebido'));
-  const pagoLife       = sum(ativos(state.despesas).filter(d=>d.status==='pago'));
+  const pagoLife       = ativos(state.despesas).filter(d=>d.status==='pago').reduce((s,d)=>s+((d.valorPago!=null&&d.valorPago!=='')?Number(d.valorPago):(Number(d.valor)||0)),0);
   const previstoReceber= sum(ativos(state.receitas).filter(r=>r.status!=='recebido'));
   const emAberto       = sum(ativos(state.despesas).filter(d=>d.status!=='pago'));
   const caixaAtual     = aportesTotal + recebidoLife - pagoLife;          // caixa disponível hoje
@@ -599,17 +600,70 @@ VIEWS.vendas = function(){
 };
 
 /* ---------------- RECEITAS ---------------- */
+/* ---------- Filtros por data (financeiro) ---------- */
+function isoDay(d){ const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),a=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+a; }
+function periodoRangeStr(){ const f=state.filtros; const p=f.finPeriodo||'todos'; const now=new Date();
+  const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x;};
+  const hoje=isoDay(now);
+  if(p==='hoje') return {ini:hoje,fim:hoje};
+  if(p==='ontem'){ const y=isoDay(add(now,-1)); return {ini:y,fim:y}; }
+  if(p==='7dias') return {ini:isoDay(add(now,-6)),fim:hoje};
+  if(p==='mes') return {ini:isoDay(new Date(now.getFullYear(),now.getMonth(),1)),fim:isoDay(new Date(now.getFullYear(),now.getMonth()+1,0))};
+  if(p==='mespassado') return {ini:isoDay(new Date(now.getFullYear(),now.getMonth()-1,1)),fim:isoDay(new Date(now.getFullYear(),now.getMonth(),0))};
+  if(p==='periodo') return {ini:f.finDe||null,fim:f.finAte||null};
+  return null;
+}
+function passaData(dateStr){ const r=periodoRangeStr(); if(!r) return true; if(!dateStr) return false; const d=String(dateStr).slice(0,10); if(r.ini&&d<r.ini) return false; if(r.fim&&d>r.fim) return false; return true; }
+function dateFilterUI(){ const f=state.filtros; const p=f.finPeriodo||'todos';
+  const o=(v,l)=>`<option value="${v}" ${p===v?'selected':''}>${l}</option>`;
+  return `<div class="field"><label>Período (por data)</label><select data-filtro="finPeriodo">${o('todos','Todas as datas')}${o('hoje','Hoje')}${o('ontem','Ontem')}${o('7dias','Últimos 7 dias')}${o('mes','Este mês')}${o('mespassado','Mês passado')}${o('periodo','Período…')}</select></div>${p==='periodo'?`<div class="field"><label>De</label><input type="date" data-filtro="finDe" value="${esc(f.finDe||'')}"></div><div class="field"><label>Até</label><input type="date" data-filtro="finAte" value="${esc(f.finAte||'')}"></div>`:''}`;
+}
+
+/* ---------------- FLUXO DE CAIXA ---------------- */
+VIEWS.fluxo = function(){
+  const f=state.filtros; const modo=f.fluxoModo||'realizado';
+  const movs=[];
+  ativos(state.aportes).forEach(a=>movs.push({data:a.data,tipo:'Aporte',cls:'roy',desc:'Aporte'+(a.socio?' — '+a.socio:'')+(a.finalidade?' ('+a.finalidade+')':''),valor:Number(a.valor)||0,sinal:1,prev:false}));
+  ativos(state.receitas).forEach(r=>{ const real=r.status==='recebido'; if(modo==='realizado'&&!real) return;
+    movs.push({data:real?(r.recebidoEm||r.vencimento):r.vencimento,tipo:'Receita',cls:'ok',desc:descReceita(r),valor:Number(r.valor)||0,sinal:1,prev:!real}); });
+  ativos(state.despesas).forEach(d=>{ const real=d.status==='pago'; if(modo==='realizado'&&!real) return;
+    const vlr=(real&&d.valorPago!=null&&d.valorPago!=='')?Number(d.valorPago):(Number(d.valor)||0);
+    movs.push({data:real?(d.pagamento||d.vencimento):d.vencimento,tipo:'Despesa',cls:'off',desc:(d.descricao||'')+(d.categoria?' · '+d.categoria:'')+(real&&d.tituloPagamento?' — '+d.tituloPagamento:''),valor:vlr,sinal:-1,prev:!real}); });
+  movs.sort((a,b)=>tms(a.data)-tms(b.data)||a.tipo.localeCompare(b.tipo));
+  let saldo=0; const rows=[];
+  movs.forEach(m=>{ saldo+=m.sinal*m.valor; if(passaData(m.data)) rows.push({...m,saldo}); });
+  const ent=rows.filter(r=>r.sinal>0).reduce((s,r)=>s+r.valor,0);
+  const sai=rows.filter(r=>r.sinal<0).reduce((s,r)=>s+r.valor,0);
+  const saldoFim=rows.length?rows[rows.length-1].saldo:saldo;
+  const kpi=(l,v,c)=>`<div class="kpi"><div class="lab">${l}</div><div class="val"${c?` style="color:${c}"`:''}>${brl(v)}</div></div>`;
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Fluxo de Caixa</h2><p>Todas as movimentações por data — aportes e receitas (entradas), despesas (saídas) e o saldo acumulado.</p></div></div>
+  <div class="filters">
+    ${dateFilterUI()}
+    <div class="field"><label>Modo</label><select data-filtro="fluxoModo"><option value="realizado" ${modo==='realizado'?'selected':''}>Realizado (caixa de fato)</option><option value="tudo" ${modo==='tudo'?'selected':''}>Com previstos</option></select></div>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:16px">${kpi('Entradas',ent,'var(--green)')}${kpi('Saídas',sai,'var(--danger)')}${kpi('Resultado do período',ent-sai)}${kpi('Saldo acumulado',saldoFim,saldoFim<0?'var(--danger)':'var(--green)')}</div>
+  <div class="panel"><div class="tbl-wrap"><table>
+    <thead><tr><th class="num">Data</th><th>Tipo</th><th>Descrição</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead>
+    <tbody>${rows.length?rows.map(m=>`<tr class="${m.prev?'inativo':''}"><td class="num">${fmtDate(m.data)}</td><td><span class="tag ${m.cls}">${m.tipo}</span>${m.prev?' <span class="cell-sub">(previsto)</span>':''}</td><td>${esc(m.desc)}</td><td class="num" style="color:var(--green)">${m.sinal>0?brl(m.valor):''}</td><td class="num" style="color:var(--danger)">${m.sinal<0?brl(m.valor):''}</td><td class="num"><b>${brl(m.saldo)}</b></td></tr>`).join('')
+      :`<tr><td colspan="6"><div class="empty"><div class="big">💵</div>Sem movimentações no período.</div></td></tr>`}</tbody></table></div></div>`;
+};
+
 VIEWS.receitas = function(){
   const f=state.filtros; let list=state.showInativos?state.receitas.slice():ativos(state.receitas);
   if(f.compMes) list=list.filter(r=>r.competencia===f.compMes);
   if(f.franqueado) list=list.filter(r=>(r.franqueadoId||unidById(r.unidadeId)?.franqueadoId)===f.franqueado);
   if(f.status) list=list.filter(r=>r.status===f.status);
+  if(f.receitaTipo) list=list.filter(r=>(r.tipo||'')===f.receitaTipo);
+  list=list.filter(r=>passaData(r.vencimento));
   list.sort((a,b)=>(b.competencia||'').localeCompare(a.competencia||'')||tms(b.criadoEm)-tms(a.criadoEm));
   const sum=a=>a.reduce((s,x)=>s+(Number(x.valor)||0),0);
   return `${readOnlyNote()}
   <div class="page-head"><div><h2>Receitas</h2><p>Royalties e taxas de franquia — as entradas do fluxo de caixa da franqueadora.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="nova-receita">+ Nova receita</button>`:''}</div>
   <div class="filters">
+    ${dateFilterUI()}
     <div class="field"><label>Competência</label><select data-filtro="compMes"><option value="">Todas</option>${mesesComMovimento().map(m=>`<option value="${m}" ${f.compMes===m?'selected':''}>${monthLabel(m)}</option>`).join('')}</select></div>
+    <div class="field"><label>Tipo de receita</label><select data-filtro="receitaTipo"><option value="">Todos</option>${[...new Set(ativos(state.receitas).map(r=>r.tipo).filter(Boolean))].map(t=>`<option value="${t}" ${f.receitaTipo===t?'selected':''}>${({royalty:'Royalty',taxa_franquia:'Taxa de franquia'}[t]||esc(t))}</option>`).join('')}</select></div>
     <div class="field"><label>Franqueado</label><select data-filtro="franqueado"><option value="">Todos</option>${ativos(state.franqueados).map(fr=>`<option value="${fr.id}" ${f.franqueado===fr.id?'selected':''}>${esc(fr.nome)}</option>`).join('')}</select></div>
     <div class="field"><label>Status</label><select data-filtro="status"><option value="">Todos</option><option value="previsto" ${f.status==='previsto'?'selected':''}>Previsto</option><option value="recebido" ${f.status==='recebido'?'selected':''}>Recebido</option></select></div>
   </div>
@@ -626,18 +680,24 @@ VIEWS.despesas = function(){
   const f=state.filtros; let list=state.showInativos?state.despesas.slice():ativos(state.despesas);
   if(f.compMes) list=list.filter(d=>d.competencia===f.compMes);
   if(f.status) list=list.filter(d=>d.status===f.status);
+  if(f.despesaCat) list=list.filter(d=>(d.categoria||'')===f.despesaCat);
+  list=list.filter(d=>passaData(d.status==='pago'?(d.pagamento||d.vencimento):d.vencimento));
   list.sort((a,b)=>(b.vencimento||'').localeCompare(a.vencimento||''));
+  const valPago=d=>(d.valorPago!=null&&d.valorPago!=='')?Number(d.valorPago):(Number(d.valor)||0);
   const sum=a=>a.reduce((s,x)=>s+(Number(x.valor)||0),0);
+  const sumPago=a=>a.reduce((s,x)=>s+valPago(x),0);
   return `${readOnlyNote()}
   <div class="page-head"><div><h2>Despesas da franqueadora</h2><p>Contas a pagar e pagas da operação Pipó.</p></div><div class="spacer"></div>${toggleInativosHTML()}${state.canEdit?`<button class="btn primary" data-act="nova-despesa">+ Nova despesa</button>`:''}</div>
   <div class="filters">
+    ${dateFilterUI()}
     <div class="field"><label>Competência</label><select data-filtro="compMes"><option value="">Todas</option>${mesesComMovimento().map(m=>`<option value="${m}" ${f.compMes===m?'selected':''}>${monthLabel(m)}</option>`).join('')}</select></div>
+    <div class="field"><label>Tipo de despesa</label><select data-filtro="despesaCat"><option value="">Todas</option>${[...new Set(ativos(state.despesas).map(d=>d.categoria).filter(Boolean))].sort().map(c=>`<option value="${esc(c)}" ${f.despesaCat===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
     <div class="field"><label>Status</label><select data-filtro="status"><option value="">Todos</option><option value="aberto" ${f.status==='aberto'?'selected':''}>Em aberto</option><option value="pago" ${f.status==='pago'?'selected':''}>Pago</option></select></div>
   </div>
-  <div class="kpi-grid" style="margin-bottom:16px"><div class="kpi"><div class="lab">Pago</div><div class="val" style="color:var(--danger)">${brl(sum(list.filter(d=>d.status==='pago')))}</div></div><div class="kpi"><div class="lab">Em aberto</div><div class="val" style="color:var(--amber)">${brl(sum(list.filter(d=>d.status!=='pago')))}</div></div></div>
+  <div class="kpi-grid" style="margin-bottom:16px"><div class="kpi"><div class="lab">Pago</div><div class="val" style="color:var(--danger)">${brl(sumPago(list.filter(d=>d.status==='pago')))}</div></div><div class="kpi"><div class="lab">Em aberto</div><div class="val" style="color:var(--amber)">${brl(sum(list.filter(d=>d.status!=='pago')))}</div></div></div>
   <div class="panel"><div class="tbl-wrap"><table>
     <thead><tr><th>Descrição</th><th>Categoria</th><th class="num">Valor</th><th class="num">Vencimento</th><th class="num">Pagamento</th><th>Status</th><th>Anexo</th><th></th></tr></thead>
-    <tbody>${list.length?list.map(d=>`<tr class="${d.ativo===false?'inativo':''}"><td><b>${esc(d.descricao||'—')}</b>${obsCell(d.observacao)}</td><td class="cell-sub">${esc(d.categoria||'—')}</td><td class="num">${brl(d.valor)}</td><td class="num">${fmtDate(d.vencimento)}</td><td class="num">${fmtDate(d.pagamento)}</td><td>${d.status==='pago'?'<span class="tag ok">Pago</span>':'<span class="tag prev">Aberto</span>'}</td><td>${anexoCell(d)}</td><td><div class="row-actions">${state.canEdit&&d.ativo!==false&&d.status!=='pago'?`<button class="btn sm" data-act="pagar" data-id="${d.id}">Pagar</button>`:''}${rowActions('despesa',d)}</div></td></tr>`).join('')
+    <tbody>${list.length?list.map(d=>`<tr class="${d.ativo===false?'inativo':''}"><td><b>${esc(d.descricao||'—')}</b>${obsCell(d.observacao)}</td><td class="cell-sub">${esc(d.categoria||'—')}</td><td class="num">${d.status==='pago'?`${brl(valPago(d))}${(valPago(d)!==(Number(d.valor)||0))?`<div class="muted" style="font-size:11px">prev. ${brl(d.valor)}</div>`:''}`:brl(d.valor)}</td><td class="num">${fmtDate(d.vencimento)}</td><td class="num">${fmtDate(d.pagamento)}${d.tituloPagamento?`<div class="muted" style="font-size:11px">${esc(d.tituloPagamento)}</div>`:''}</td><td>${d.status==='pago'?'<span class="tag ok">Pago</span>':'<span class="tag prev">Aberto</span>'}</td><td>${anexoCell(d)}</td><td><div class="row-actions">${state.canEdit&&d.ativo!==false&&d.status!=='pago'?`<button class="btn sm" data-act="pagar" data-id="${d.id}">Pagar</button>`:''}${rowActions('despesa',d)}</div></td></tr>`).join('')
       :`<tr><td colspan="8"><div class="empty"><div class="big">📉</div>Nenhuma despesa no recorte.</div></td></tr>`}</tbody></table></div></div>`;
 };
 
@@ -647,6 +707,7 @@ VIEWS.aportes = function(){
   let list=state.showInativos?state.aportes.slice():ativos(state.aportes);
   if(f.compMes) list=list.filter(a=>a.competencia===f.compMes);
   if(f.socio) list=list.filter(a=>a.socio===f.socio);
+  list=list.filter(a=>passaData(a.data));
   list.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||tms(b.criadoEm)-tms(a.criadoEm));
   const cap=capitalResumo();
   // total por sócio (vida inteira, ativos)
@@ -672,9 +733,10 @@ VIEWS.aportes = function(){
       <tbody>${socioRows.length?socioRows.map(([s,v])=>`<tr><td><b>${esc(s)}</b></td><td class="num">${brl(v)}</td></tr>`).join('')+`<tr><td><b>Total</b></td><td class="num"><b>${brl(cap.aportesTotal)}</b></td></tr>`:`<tr><td colspan="2" class="empty">Nenhum aporte.</td></tr>`}</tbody></table></div>
     </div>
     <div class="panel">
-      <div class="ph"><h3>Lançamentos</h3><div class="spacer"></div>
+      <div class="ph" style="flex-wrap:wrap;gap:6px"><h3>Lançamentos</h3><div class="spacer"></div>
         <select data-filtro="socio" style="width:auto"><option value="">Todos sócios</option>${socios.map(s=>`<option value="${esc(s)}" ${f.socio===s?'selected':''}>${esc(s)}</option>`).join('')}</select>
-        <select data-filtro="compMes" style="width:auto"><option value="">Todas comp.</option>${mesesComMovimento().map(m=>`<option value="${m}" ${f.compMes===m?'selected':''}>${monthLabel(m)}</option>`).join('')}</select>
+        <select data-filtro="finPeriodo" style="width:auto">${[['todos','Todas as datas'],['hoje','Hoje'],['ontem','Ontem'],['7dias','Últimos 7 dias'],['mes','Este mês'],['mespassado','Mês passado'],['periodo','Período…']].map(([v,l])=>`<option value="${v}" ${(f.finPeriodo||'todos')===v?'selected':''}>${l}</option>`).join('')}</select>
+        ${(f.finPeriodo==='periodo')?`<input type="date" data-filtro="finDe" value="${esc(f.finDe||'')}" style="width:auto"><input type="date" data-filtro="finAte" value="${esc(f.finAte||'')}" style="width:auto">`:''}
       </div>
       <div class="tbl-wrap"><table>
         <thead><tr><th class="num">Data</th><th>Sócio</th><th>Forma</th><th class="num">Valor</th><th>Finalidade / obs.</th><th>Anexo</th><th></th></tr></thead>
@@ -798,8 +860,19 @@ async function setAtivo(tipo,id,ativo){
 }
 async function marcarReceber(id){ const r=state.receitas.find(x=>x.id===id); if(!r) return;
   if(await save('receitas',{...r,status:'recebido',recebidoEm:todayISO(),atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()})){ await logAcao('receber','Receita',id,descReceita(r)+' — '+brl(r.valor)); toast('Receita recebida'); await loadAll(); } }
-async function marcarPagar(id){ const d=state.despesas.find(x=>x.id===id); if(!d) return;
-  if(await save('despesas',{...d,status:'pago',pagamento:todayISO(),atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()})){ await logAcao('pagar','Despesa',id,(d.descricao||'')+' — '+brl(d.valor)); toast('Despesa paga'); await loadAll(); } }
+function marcarPagar(id){ const d=state.despesas.find(x=>x.id===id); if(!d) return;
+  const ehGestao=state.canEdit;
+  openModal('Registrar pagamento — '+(d.descricao||''),`<div class="form-grid">
+    <div class="field"><label>Data de pagamento *</label><input id="pg-data" type="date" value="${todayISO()}"></div>
+    <div class="field"><label>Valor pago (R$) *</label><input id="pg-valor" type="number" step="0.01" value="${d.valor??''}" placeholder="pode ser diferente do previsto"></div>
+    <div class="field full"><div class="muted" style="font-size:12px">Valor previsto: ${brl(d.valor)}</div></div>
+    ${ehGestao?`<div class="field full"><label>Título do pagamento <span class="muted">(só gestão/financeiro)</span></label><input id="pg-titulo" placeholder="ex.: a título de frete / adesivagem da máquina"></div>`:''}
+    </div>`,
+    async ()=>{ const data=val('pg-data'); if(!data){ toast('Informe a data de pagamento',true); return false; }
+      let vp=numval('pg-valor'); if(!vp) vp=d.valor;
+      const titulo=ehGestao?(val('pg-titulo')||null):(d.tituloPagamento||null);
+      const obj={...d,status:'pago',pagamento:data,valorPago:vp,tituloPagamento:titulo,atualizadoPor:state.myId,atualizadoEm:new Date().toISOString()};
+      if(await save('despesas',obj)){ await logAcao('pagar','Despesa',id,(d.descricao||'')+' — '+brl(vp)+(titulo?(' ('+titulo+')'):'')); toast('Pagamento registrado'); await loadAll(); } }); }
 function resumoItem(t,i){ if(t==='franqueado')return i.nome; if(t==='unidade')return (i.codigo||'')+' '+(i.apelido||'');
   if(t==='venda'){const u=unidById(i.unidadeId);return (u?.codigo||'')+' '+monthLabel(monthKey(i.competencia))+' '+brl(i.valor);}
   if(t==='receita')return descReceita(i)+' '+brl(i.valor); if(t==='despesa')return (i.descricao||'')+' '+brl(i.valor);
@@ -908,20 +981,27 @@ function formReceita(item){ const i=item||{}; const tipo=i.tipo||'royalty';
       const obj={ id:i.id||uid(), tipo:val('rc-tipo'), franqueadoId:val('rc-franq')||null, unidadeId:val('rc-unid')||null, competencia:val('rc-comp')||monthKey(), valor, vencimento:val('rc-venc')||null, status:val('rc-status'), origem:i.origem||'manual', observacao:val('rc-obs')||null, anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
       if(await save('receitas',obj)){ await logAcao(item?'editar':'criar','Receita',obj.id,resumoItem('receita',obj)); toast('Receita salva'); await loadAll(); } });
 }
-function formDespesa(item){ const i=item||{}; const cats=['Marketing','Comissões','Jurídico','Sistemas/Software','Logística','Administrativo','Impostos','Outros'];
+function formDespesa(item){ const i=item||{}; const catsFixas=['Frete','Adesivagem','Evento','Pipoca/Insumos','Máquinas/Equipamentos','Marketing','Comissões','Jurídico','Sistemas/Software','Logística','Administrativo','Impostos','Outros'];
+  const cats=catsFixas.slice(); if(i.categoria&&!cats.includes(i.categoria)) cats.unshift(i.categoria);
+  const ehGestao=state.canEdit;
   openModal(item?'Editar despesa':'Nova despesa',`<div class="form-grid">
     <div class="field full"><label>Descrição *</label><input id="dp-desc" value="${esc(i.descricao||'')}"></div>
     <div class="field"><label>Categoria</label><select id="dp-cat">${cats.map(c=>`<option ${i.categoria===c?'selected':''}>${c}</option>`).join('')}</select></div>
-    <div class="field"><label>Valor (R$) *</label><input id="dp-valor" type="number" step="0.01" value="${i.valor??''}"></div>
+    <div class="field"><label>Valor previsto (R$) *</label><input id="dp-valor" type="number" step="0.01" value="${i.valor??''}"></div>
     <div class="field"><label>Competência</label><input id="dp-comp" type="month" value="${esc(i.competencia||monthKey())}"></div>
     <div class="field"><label>Vencimento</label><input id="dp-venc" type="date" value="${esc(i.vencimento||todayISO())}"></div>
     <div class="field"><label>Status</label><select id="dp-status"><option value="aberto" ${i.status!=='pago'?'selected':''}>Em aberto</option><option value="pago" ${i.status==='pago'?'selected':''}>Pago</option></select></div>
-    <div class="field"><label>Data de pagamento</label><input id="dp-pag" type="date" value="${esc(i.pagamento||'')}"></div>
+    <div class="field"><label>Data de pagamento</label><input id="dp-pag" type="date" value="${esc(i.pagamento||'')}" onchange="if(this.value){var s=document.getElementById('dp-status');if(s)s.value='pago';var vp=document.getElementById('dp-valorpago');if(vp&&!vp.value)vp.value=(document.getElementById('dp-valor').value||'');}"></div>
+    <div class="field"><label>Valor pago (R$)</label><input id="dp-valorpago" type="number" step="0.01" value="${i.valorPago??''}" placeholder="deixe vazio = valor previsto"></div>
+    ${ehGestao?`<div class="field full"><label>Título do pagamento <span class="muted">(só gestão/financeiro)</span></label><input id="dp-titulopag" value="${esc(i.tituloPagamento||'')}" placeholder="ex.: a título de frete da 1ª máquina"></div>`:''}
     <div class="field full"><label>Observação</label><input id="dp-obs" value="${esc(i.observacao||'')}" placeholder="ex.: para que serviu, fornecedor, referência..."></div>
     <div class="field full"><label>Anexo (nota/comprovante)</label><input id="dp-file" type="file"></div></div>`,
     async ()=>{ const desc=val('dp-desc'); if(!desc){ toast('Informe a descrição',true); return false; } const valor=numval('dp-valor'); if(!valor){ toast('Informe o valor',true); return false; }
       const anexo=await handleUpload('dp-file','despesas');
-      const obj={ id:i.id||uid(), descricao:desc, categoria:val('dp-cat'), valor, competencia:val('dp-comp')||monthKey(val('dp-venc')||todayISO()), vencimento:val('dp-venc')||null, status:val('dp-status'), pagamento:val('dp-pag')||null, observacao:val('dp-obs')||null, anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
+      const pag=val('dp-pag')||null; let status=val('dp-status'); if(pag) status='pago';
+      let valorPago = numval('dp-valorpago'); if(status==='pago'&&!valorPago) valorPago=valor; if(status!=='pago') valorPago=null;
+      const tituloPagamento = ehGestao ? (val('dp-titulopag')||null) : (i.tituloPagamento||null);
+      const obj={ id:i.id||uid(), descricao:desc, categoria:val('dp-cat'), valor, valorPago, tituloPagamento, competencia:val('dp-comp')||monthKey(val('dp-venc')||todayISO()), vencimento:val('dp-venc')||null, status, pagamento:pag, observacao:val('dp-obs')||null, anexoPath:(anexo?anexo.anexoPath:i.anexoPath)||null, anexoNome:(anexo?anexo.anexoNome:i.anexoNome)||null, ativo:i.ativo!==false, criadoPor:i.criadoPor||state.myId, criadoEm:i.criadoEm||new Date().toISOString(), atualizadoPor:state.myId, atualizadoEm:new Date().toISOString() };
       if(await save('despesas',obj)){ await logAcao(item?'editar':'criar','Despesa',obj.id,resumoItem('despesa',obj)); toast('Despesa salva'); await loadAll(); } });
 }
 function formAporte(item){ const i=item||{};
