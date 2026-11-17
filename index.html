@@ -213,15 +213,16 @@
   <div class="shell">
     <nav class="side" id="nav">
       <div class="nav-sep">Operação</div>
-      <div class="nav-item active" data-view="fluxo"><span class="ico">💵</span> Fluxo de Caixa</div>
       <div class="nav-item" data-view="painel"><span class="ico">📊</span> Painel / Resumo</div>
       <div class="nav-item" data-view="dashboard"><span class="ico">📈</span> Dashboard</div>
       <div class="nav-item" data-view="franqueados"><span class="ico">👥</span> Franqueados</div>
       <div class="nav-item" data-view="unidades"><span class="ico">🏪</span> Unidades</div>
       <div class="nav-item" data-view="vendas"><span class="ico">🧾</span> Vendas</div>
-      <div class="nav-sep">Comercial</div>
+      <div class="nav-sep">Expansão</div>
       <div class="nav-item" data-view="leads"><span class="ico">🎯</span> Leads / Funil</div>
+      <div class="nav-item" data-view="canal"><span class="ico">🔗</span> Canal (WhatsApp)</div>
       <div class="nav-sep">Financeiro</div>
+      <div class="nav-item active" data-view="fluxo"><span class="ico">💵</span> Fluxo de Caixa</div>
       <div class="nav-item" data-view="receitas"><span class="ico">💰</span> Receitas</div>
       <div class="nav-item" data-view="despesas"><span class="ico">📉</span> Despesas</div>
       <div class="nav-item" data-view="aportes"><span class="ico">🤝</span> Aportes</div>
@@ -248,7 +249,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const TABLES = ["franqueados","unidades","vendas","receitas","despesas","aportes","documentos","log","usuarios","leads","lead_mensagens","socios"];
 const state = {
   franqueados:[], unidades:[], vendas:[], receitas:[], despesas:[], aportes:[], documentos:[], log:[], usuarios:[],
-  leads:[], leadMensagens:[], socios:[],
+  leads:[], leadMensagens:[], socios:[], canal:null,
   config:{ royaltyPct:8, royaltyMinimo:1200, diaVencimento:10, taxaFranquia:25000 },
   me:null, myId:null, myEmail:null, perfil:'visualizacao', canEdit:false, isMaster:false,
   view:"fluxo", filtros:{ compMes:"", regiao:"", franqueado:"", status:"" }, showInativos:false
@@ -281,7 +282,7 @@ function toRow(obj){ const o={}; for(const k in obj){ if(obj[k]!==undefined) o[t
 /* ---------- data access ---------- */
 async function loadAll(){
   const names = TABLES.map(t=>'pipo_'+t);
-  const [fr,un,vd,rc,dp,ap,dc,lg,us,cfg,ld,lm,sc] = await Promise.all([
+  const [fr,un,vd,rc,dp,ap,dc,lg,us,cfg,ld,lm,sc,cn] = await Promise.all([
     sb.from('pipo_franqueados').select('*'),
     sb.from('pipo_unidades').select('*'),
     sb.from('pipo_vendas').select('*'),
@@ -294,7 +295,8 @@ async function loadAll(){
     sb.from('pipo_config').select('*').eq('id','geral').maybeSingle(),
     sb.from('pipo_leads').select('*'),
     sb.from('pipo_lead_mensagens').select('*').order('em',{ascending:true}),
-    sb.from('pipo_socios').select('*')
+    sb.from('pipo_socios').select('*'),
+    sb.from('pipo_canais').select('*').eq('id','whatsapp').maybeSingle()
   ]);
   const err = [fr,un,vd,rc,dp,ap,dc,lg,us].find(r=>r.error);
   if(err && err.error){ toast('Erro ao carregar: '+err.error.message, true); }
@@ -311,6 +313,7 @@ async function loadAll(){
   state.leadMensagens=(lm&&lm.data||[]).map(fromRow);
   state.socios=(sc&&sc.data||[]).map(fromRow);
   if(cfg && cfg.data) state.config={...state.config, ...fromRow(cfg.data)};
+  state.canal = (cn && cn.data) ? fromRow(cn.data) : (state.canal||null);
   renderApp();
 }
 async function save(table, obj){
@@ -801,6 +804,64 @@ VIEWS.config = function(){
     </div>${state.canEdit?`<div style="margin-top:16px"><button class="btn primary" data-act="salvar-config">Salvar padrões</button></div>`:''}</div></div>`;
 };
 
+VIEWS.canal = function(){
+  const c=state.canal||{};
+  const temToken = !!c.token;
+  const conectado = (c.status==='conectado');
+  const leadsNovos = ativos(state.leads).filter(l=>l.etapa==='novo'||l.etapa==='entrada').length;
+  if(!state.canEdit){
+    return `${readOnlyNote()}
+    <div class="page-head"><div><h2>Canal (WhatsApp)</h2><p>Conexão do WhatsApp e disparo do bot de qualificação.</p></div></div>
+    <div class="panel" style="max-width:640px"><div class="mb" style="padding:18px 20px">
+      <div class="kpi" style="display:inline-block;margin-right:14px"><div class="lab">Status</div><div class="val" style="color:${conectado?'var(--green)':'var(--amber)'}">${conectado?'Conectado':'Não conectado'}</div></div>
+      <p class="muted" style="margin-top:12px">A configuração do canal é restrita à gestão.</p>
+    </div></div>`;
+  }
+  return `${readOnlyNote()}
+  <div class="page-head"><div><h2>Canal (WhatsApp)</h2><p>Conecte o número do WhatsApp e acione o bot que qualifica os leads da landing e leva à reunião.</p></div><div class="spacer"></div>
+    <span class="tag ${conectado?'ok':'prev'}">${conectado?'● Conectado':'○ Não conectado'}</span></div>
+
+  <div class="panel" style="max-width:720px;margin-bottom:16px"><div class="ph"><h3>Como funciona</h3></div>
+    <div class="mb" style="padding:16px 20px;font-size:13.5px;line-height:1.6;color:var(--muted)">
+      1. O lead preenche o cadastro na landing (pipofranchising.com.br) → cai no funil em <b>Leads</b> (${leadsNovos} aguardando).<br>
+      2. Com o canal conectado e o <b>bot ativo</b>, o sistema envia a <b>primeira mensagem</b> automaticamente a partir do cadastro.<br>
+      3. O bot qualifica (modelo de negócio, capital, cidade, ponto), grava as respostas na ficha do lead e conduz ao <b>agendamento da apresentação do plano de negócios</b>.<br>
+      4. Todas as conversas ficam na caixa de entrada de cada lead, dentro do sistema.
+    </div></div>
+
+  <div class="panel" style="max-width:720px"><div class="ph"><h3>Conexão do WhatsApp</h3></div>
+    <div class="mb" style="padding:18px 20px"><div class="form-grid">
+      <div class="field"><label>Provedor</label><select id="cn-prov"><option value="uazapi" ${c.provedor!=='twilio'?'selected':''}>Uazapi (conecta por QR, sem verificação Meta)</option><option value="twilio" ${c.provedor==='twilio'?'selected':''}>Twilio (API oficial)</option></select></div>
+      <div class="field"><label>Número do WhatsApp</label><input id="cn-num" value="${esc(c.numero||'')}" placeholder="ex.: 55 11 90000-0000"></div>
+      <div class="field full"><label>Servidor (Server URL do Uazapi)</label><input id="cn-url" value="${esc(c.servidorUrl||'')}" placeholder="ex.: https://laserco.uazapi.com"></div>
+      <div class="field"><label>Instância</label><input id="cn-inst" value="${esc(c.instancia||'')}" placeholder="nome da instância"></div>
+      <div class="field"><label>Token / Admin Token ${temToken?'<span class="muted">(salvo)</span>':''}</label><input id="cn-token" type="password" placeholder="${temToken?'•••••••• (preencha só para trocar)':'cole o token aqui'}"></div>
+    </div>
+    <div style="margin:16px 0 4px;border-top:1px solid var(--line);padding-top:16px"><div class="form-grid">
+      <div class="field"><label>Bot de qualificação</label><select id="cn-bot"><option value="0" ${!c.botAtivo?'selected':''}>Desligado</option><option value="1" ${c.botAtivo?'selected':''}>Ligado (envia 1ª mensagem automática)</option></select></div>
+      <div class="field full"><label>Primeira mensagem (template)</label><input id="cn-msg" value="${esc(c.primeiraMsg||'Oi {{nome}}! Aqui é da Pipó 🍿 Vi seu interesse na nossa franquia de vending machine. Posso te explicar rapidinho como funciona e já deixar agendada uma apresentação?')}"></div>
+    </div></div>
+    <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+      <button class="btn primary" data-act="salvar-canal">Salvar e conectar</button>
+      <button class="btn" data-act="testar-bot">Testar o bot</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin-top:12px">O token é guardado no servidor (acesso só da gestão) e nunca aparece no código do app. A ativação da conexão ao vivo (QR) e o envio automático entram em operação assim que o token do seu servidor Uazapi estiver salvo.</p>
+    </div></div>`;
+};
+async function salvarCanal(){
+  const token = (document.getElementById('cn-token')||{}).value || '';
+  const obj = { id:'whatsapp', provedor:val('cn-prov')||'uazapi', numero:val('cn-num')||null,
+    servidorUrl:val('cn-url')||null, instancia:val('cn-inst')||null,
+    botAtivo: val('cn-bot')==='1', primeiraMsg:val('cn-msg')||null,
+    atualizadoEm:new Date().toISOString(), atualizadoPor:state.myId };
+  if(token) obj.token = token;                 // só grava token quando preenchido (write-only)
+  else if(state.canal&&state.canal.token) obj.token = state.canal.token;
+  const { error } = await sb.from('pipo_canais').upsert(toRow(obj));
+  if(error){ toast('Erro ao salvar canal: '+error.message, true); return; }
+  await logAcao('editar','Canal','whatsapp','Config do canal WhatsApp ('+obj.provedor+')');
+  toast('Canal salvo'); await loadAll();
+}
+
 /* ---------- shared bits ---------- */
 function toggleInativosHTML(){ return `<label class="toggle"><input type="checkbox" data-act="toggle-inativos" ${state.showInativos?'checked':''}> mostrar inativos</label>`; }
 function rowActions(tipo,item){ if(!state.canEdit) return '';
@@ -834,6 +895,7 @@ document.body.addEventListener('click', async e=>{
     case 'testar-bot': return simularBot();
     case 'novo-usuario': return formUsuario();
     case 'salvar-config': return salvarConfig();
+    case 'salvar-canal': return salvarCanal();
     case 'gerar-royalties': return gerarRoyalties();
     case 'editar': return editar(tipo,id);
     case 'inativar': return setAtivo(tipo,id,false);
