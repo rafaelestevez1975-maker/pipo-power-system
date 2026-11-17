@@ -841,25 +841,63 @@ VIEWS.canal = function(){
       <div class="field"><label>Bot de qualificação</label><select id="cn-bot"><option value="0" ${!c.botAtivo?'selected':''}>Desligado</option><option value="1" ${c.botAtivo?'selected':''}>Ligado (envia 1ª mensagem automática)</option></select></div>
       <div class="field full"><label>Primeira mensagem (template)</label><input id="cn-msg" value="${esc(c.primeiraMsg||'Oi {{nome}}! Aqui é da Pipó 🍿 Vi seu interesse na nossa franquia de vending machine. Posso te explicar rapidinho como funciona e já deixar agendada uma apresentação?')}"></div>
     </div></div>
-    <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
-      <button class="btn primary" data-act="salvar-canal">Salvar e conectar</button>
+    <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn primary" data-act="salvar-canal">Salvar</button>
+      <button class="btn primary" data-act="canal-conectar">Conectar / Gerar QR</button>
+      <button class="btn" data-act="canal-status">Atualizar status</button>
       <button class="btn" data-act="testar-bot">Testar o bot</button>
     </div>
-    <p class="muted" style="font-size:12px;margin-top:12px">O token é guardado no servidor (acesso só da gestão) e nunca aparece no código do app. A ativação da conexão ao vivo (QR) e o envio automático entram em operação assim que o token do seu servidor Uazapi estiver salvo.</p>
+    <div id="cn-qr" style="margin-top:16px"></div>
+    <p class="muted" style="font-size:12px;margin-top:12px">O token fica guardado no servidor (acesso só da gestão) e nunca aparece no código do app. Clique em <b>Conectar / Gerar QR</b> e leia o código no WhatsApp do número (Aparelhos conectados → Conectar aparelho).</p>
     </div></div>`;
 };
-async function salvarCanal(){
+let _canalPoll=null;
+async function salvarCanal(silent){
   const token = (document.getElementById('cn-token')||{}).value || '';
   const obj = { id:'whatsapp', provedor:val('cn-prov')||'uazapi', numero:val('cn-num')||null,
     servidorUrl:val('cn-url')||null, instancia:val('cn-inst')||null,
     botAtivo: val('cn-bot')==='1', primeiraMsg:val('cn-msg')||null,
     atualizadoEm:new Date().toISOString(), atualizadoPor:state.myId };
   if(token) obj.token = token;                 // só grava token quando preenchido (write-only)
-  else if(state.canal&&state.canal.token) obj.token = state.canal.token;
   const { error } = await sb.from('pipo_canais').upsert(toRow(obj));
-  if(error){ toast('Erro ao salvar canal: '+error.message, true); return; }
+  if(error){ toast('Erro ao salvar canal: '+error.message, true); return false; }
   await logAcao('editar','Canal','whatsapp','Config do canal WhatsApp ('+obj.provedor+')');
-  toast('Canal salvo'); await loadAll();
+  if(!silent){ toast('Canal salvo'); await loadAll(); }
+  return true;
+}
+function canalQrBox(html){ const el=document.getElementById('cn-qr'); if(el) el.innerHTML=html; }
+async function canalConectar(){
+  const ok = await salvarCanal(true); if(!ok) return;
+  canalQrBox('<div class="muted">Conectando ao servidor e gerando o QR…</div>');
+  const { data, error } = await sb.functions.invoke('pipo-canal',{ body:{ action:'connect' } });
+  if(error){ canalQrBox('<div style="color:var(--danger)">Erro ao conectar: '+esc(error.message||String(error))+'</div>'); return; }
+  if(data && data.error){ canalQrBox('<div style="color:var(--danger)">'+esc(data.error)+'</div>'); return; }
+  let qr = data&&data.qr;
+  const pair = data&&data.paircode;
+  let html='';
+  if(qr){ const src = String(qr).startsWith('data:')?qr:('data:image/png;base64,'+qr);
+    html += '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><img src="'+src+'" alt="QR" style="width:230px;height:230px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px">'+
+            '<div><b>Leia o QR no WhatsApp</b><div class="muted" style="font-size:13px;margin-top:6px;max-width:260px">No celular do número: WhatsApp → Aparelhos conectados → Conectar aparelho, e aponte para este código.</div></div></div>'; }
+  if(pair){ html += '<div style="margin-top:10px">Ou use o código de pareamento: <b style="font-size:18px;letter-spacing:2px">'+esc(String(pair))+'</b></div>'; }
+  if(!qr && !pair){ html = '<div class="muted">Pedido enviado. Status atual: <b>'+esc(String((data&&data.status)||'—'))+'</b>. Se não apareceu QR, clique em “Atualizar status”. (Resposta do servidor registrada.)</div>'; }
+  html += '<div id="cn-st" class="muted" style="font-size:12px;margin-top:12px">Aguardando leitura…</div>';
+  canalQrBox(html);
+  // polling de status
+  if(_canalPoll) clearInterval(_canalPoll);
+  let tries=0;
+  _canalPoll=setInterval(async ()=>{ tries++;
+    const r=await sb.functions.invoke('pipo-canal',{ body:{ action:'status' } });
+    const st=(r.data&&r.data.status)||'';
+    const stEl=document.getElementById('cn-st'); if(stEl) stEl.textContent='Status: '+st;
+    if(/connected|conectado|open/i.test(String(st))){ clearInterval(_canalPoll); _canalPoll=null; toast('WhatsApp conectado!'); await loadAll(); }
+    if(tries>40){ clearInterval(_canalPoll); _canalPoll=null; }
+  }, 4000);
+}
+async function canalStatus(){
+  const { data, error } = await sb.functions.invoke('pipo-canal',{ body:{ action:'status' } });
+  if(error){ toast('Erro: '+(error.message||error), true); return; }
+  if(data&&data.error){ toast(data.error, true); return; }
+  toast('Status do canal: '+((data&&data.status)||'—')); await loadAll();
 }
 
 /* ---------- shared bits ---------- */
@@ -896,6 +934,8 @@ document.body.addEventListener('click', async e=>{
     case 'novo-usuario': return formUsuario();
     case 'salvar-config': return salvarConfig();
     case 'salvar-canal': return salvarCanal();
+    case 'canal-conectar': return canalConectar();
+    case 'canal-status': return canalStatus();
     case 'gerar-royalties': return gerarRoyalties();
     case 'editar': return editar(tipo,id);
     case 'inativar': return setAtivo(tipo,id,false);
