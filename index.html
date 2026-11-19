@@ -1263,21 +1263,29 @@ function faltaLabel(c){ return ({capital_ok:'capital',ponto_ok:'ponto',qtd_maqui
 function ultimoContatoLead(id){ const ms=state.leadMensagens.filter(m=>m.leadId===id); if(!ms.length) return null; return ms.reduce((a,m)=>tms(m.em)>tms(a)?m.em:a, ms[0].em); }
 VIEWS.leads = function(){
   const f=state.filtros;
-  const all=ativos(state.leads);
-  let leads=all;
+  const st=f.leadStatus||'ativos';
+  const ativosAll=ativos(state.leads);
+  const base = st==='inativos' ? state.leads.filter(l=>l.ativo===false) : (st==='todos' ? state.leads.slice() : ativosAll);
+  let leads=base;
   const busca=(f.leadBusca||'').toLowerCase().trim();
   if(busca) leads=leads.filter(l=>((l.nome||'')+' '+(l.telefone||'')+' '+(l.cidade||'')+' '+(l.email||'')).toLowerCase().includes(busca));
   if(f.leadOrigem) leads=leads.filter(l=>l.origem===f.leadOrigem);
-  const porEtapa=k=>all.filter(l=>l.etapa===k);
-  const emConversa=all.filter(l=>['contatado','qualificando','qualificado'].includes(l.etapa)).length;
+  const kpiEtapa=k=>ativosAll.filter(l=>l.etapa===k);
+  const emConversa=ativosAll.filter(l=>['contatado','qualificando','qualificado'].includes(l.etapa)).length;
+  const inativosN=state.leads.filter(l=>l.ativo===false).length;
   const kpi=(v,l)=>`<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`;
-  const origens=[...new Set(all.map(l=>l.origem).filter(Boolean))];
+  const origens=[...new Set(state.leads.map(l=>l.origem).filter(Boolean))];
   return `${readOnlyNote()}
   <div class="page-head"><div><h2>Leads / Funil</h2><p>Leads da landing e do WhatsApp da Pipó. Cada resposta do lead vira dado no cadastro — leve até o agendamento da reunião.</p></div><div class="spacer"></div>${state.canEdit?`<button class="btn" data-act="testar-bot">🤖 Testar bot</button> <button class="btn primary" data-act="novo-lead">+ Novo lead</button>`:''}</div>
-  <div class="kpis">${kpi(all.length,'Leads ativos')}${kpi(emConversa,'Em conversa')}${kpi(porEtapa('reuniao_agendada').length,'Reuniões agendadas')}${kpi(porEtapa('ganho').length,'Ganhos')}</div>
+  <div class="kpis">${kpi(ativosAll.length,'Leads ativos')}${kpi(emConversa,'Em conversa')}${kpi(kpiEtapa('reuniao_agendada').length,'Reuniões agendadas')}${kpi(kpiEtapa('ganho').length,'Ganhos')}</div>
   <div class="filters" style="margin-bottom:12px">
     <input data-filtro="leadBusca" placeholder="🔎 Buscar por nome, telefone, cidade..." value="${esc(f.leadBusca||'')}" style="min-width:240px">
     <select data-filtro="leadOrigem" style="width:auto"><option value="">Todas as origens</option>${origens.map(o=>`<option value="${o}" ${f.leadOrigem===o?'selected':''}>${esc(canalLabel(o))}</option>`).join('')}</select>
+    <select data-filtro="leadStatus" style="width:auto" title="Mostrar leads ativos, inativos ou todos">
+      <option value="ativos" ${st==='ativos'?'selected':''}>Somente ativos</option>
+      <option value="inativos" ${st==='inativos'?'selected':''}>Somente inativos${inativosN?' ('+inativosN+')':''}</option>
+      <option value="todos" ${st==='todos'?'selected':''}>Todos</option>
+    </select>
   </div>
   <div class="funnel">${ETAPAS.map(e=>{
     const col=leads.filter(l=>l.etapa===e.k).sort((a,b)=>tms(b.criadoEm)-tms(a.criadoEm));
@@ -1289,7 +1297,7 @@ function leadCard(l){
   const prox=proximaPergunta(l); const ativoFunil=!['ganho','perdido'].includes(l.etapa);
   const uc=ultimoContatoLead(l.id);
   return `<div class="lcard" data-act="abrir-lead" data-id="${l.id}">
-    <div class="lcard-nome">${esc(l.nome||'(sem nome)')}</div>
+    <div class="lcard-nome">${esc(l.nome||'(sem nome)')}${l.ativo===false?' <span class="tag" style="background:#ececec;color:#8a8a8a;font-size:10px">inativo</span>':''}</div>
     <div class="lcard-sub">${esc([l.cidade,l.estado].filter(Boolean).join('/')||'—')} · ${esc(canalLabel(l.origem))}${l.telefone?' · '+esc(l.telefone):''}</div>
     ${l.reuniaoEm?`<div class="lcard-reu">📅 ${fmtDateTime(l.reuniaoEm)}</div>`:''}
     ${uc?`<div class="lcard-sub">💬 último contato: ${fmtDateTime(uc)}</div>`:''}
@@ -1337,6 +1345,7 @@ function abrirLead(id){
   </div>`:''}`;
   const footer=ed?`<div style="margin-right:auto"><select class="btn sm" data-ld="etapa">${ETAPAS.map(e=>`<option value="${e.k}" ${l.etapa===e.k?'selected':''}>${e.label}</option>`).join('')}</select></div>
     <button class="btn" data-ld="agendar">📅 Agendar reunião</button>
+    ${l.ativo===false?'<button class="btn" data-ld="reativar">♻️ Reativar</button>':'<button class="btn ghost" data-ld="inativar">Inativar</button>'}
     <button class="btn" data-close>Fechar</button>
     <button class="btn primary" data-ld="salvar">Salvar ficha</button>`:'<button class="btn" data-close>Fechar</button>';
   renderModal('Lead — '+(l.nome||'(sem nome)'), body, footer);
@@ -1344,7 +1353,7 @@ function abrirLead(id){
   root.querySelectorAll('[data-ld]').forEach(btn=>{
     const a=btn.dataset.ld;
     if(a==='etapa'){ btn.addEventListener('change',()=>mudarEtapa(id,btn.value)); return; }
-    btn.addEventListener('click', async ()=>{ if(a==='salvar') return salvarLead(id); if(a==='add-msg') return addMensagem(id); if(a==='agendar') return agendarReuniao(id); });
+    btn.addEventListener('click', async ()=>{ if(a==='salvar') return salvarLead(id); if(a==='add-msg') return addMensagem(id); if(a==='agendar') return agendarReuniao(id); if(a==='inativar') return setLeadAtivo(id,false); if(a==='reativar') return setLeadAtivo(id,true); });
   });
 }
 async function salvarLead(id){
@@ -1354,6 +1363,15 @@ async function salvarLead(id){
     qtdMaquinas:numval('ld-qtd')||null, regiaoInteresse:val('ld-regiao')||null, observacao:val('ld-obs')||null,
     atualizadoPor:state.myId, atualizadoEm:new Date().toISOString()};
   if(await save('leads',obj)){ await logAcao('editar','Lead',id,obj.nome||''); toast('Ficha salva'); await loadAll(); abrirLead(id); }
+}
+async function setLeadAtivo(id, ativo){
+  const l=state.leads.find(x=>x.id===id); if(!l) return;
+  if(!ativo && !confirm('Inativar este lead? Ele sai do funil, mas não é excluído — você pode reativar depois no filtro "Somente inativos".')) return;
+  if(await save('leads',{...l, ativo, atualizadoPor:state.myId, atualizadoEm:new Date().toISOString()})){
+    await logAcao(ativo?'reativar':'inativar','Lead',id,l.nome||'');
+    toast(ativo?'Lead reativado':'Lead inativado');
+    $('#modal-root').innerHTML=''; await loadAll();
+  }
 }
 async function addMensagem(id){
   const texto=val('ld-msg'); if(!texto){ toast('Escreva a mensagem',true); return; }
